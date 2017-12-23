@@ -2,34 +2,45 @@ use nom::*;
 use error::*;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Preproc {
+pub enum PreprocessDirectiveName {
     Include,
     Define,
+    Undefine,
+
+    IfDefined,
+    IfNotDefined,
+    Else,
+    EndIf
 }
 
-impl Preproc {
-    fn from_str(s : &str) -> ::std::result::Result<Preproc, LexError> {
+#[derive(Debug, PartialEq, Clone)]
+pub enum Token {
+    Word(String),
+    PreprocessorDirective(::std::result::Result<PreprocessDirectiveName, LexError>),
+    Comment,
+    String(String),
+    Newline,
+    Char(char)
+}
+
+
+impl PreprocessDirectiveName {
+    fn from_str(s : &str) -> ::std::result::Result<PreprocessDirectiveName, LexError> {
         Ok(match s {
-            "include" => Preproc::Include,
-            "define" => Preproc::Define,
-            "undef" | "ifdef" | "ifndef" | "else" | "elif" |
-            "error" | "if" | "warning" | "line" | "pragma"
+            "include" => PreprocessDirectiveName::Include,
+            "define" => PreprocessDirectiveName::Define,
+            "undef" => PreprocessDirectiveName::Undefine,
+            "ifdef" => PreprocessDirectiveName::IfDefined,
+            "ifndef" => PreprocessDirectiveName::IfNotDefined,
+            "else" => PreprocessDirectiveName::Else,
+            "endif" => PreprocessDirectiveName::EndIf,
+            "error" | "warning" | "if" | "elif" | "line" | "pragma"
                 => Err(LexError::UnspportedPreprocessor(s.to_string()))?,
             _ => Err(LexError::UnrecognizedPreprocessor(s.to_string()))?
         })
     }
 }
 
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    Word(String),
-    PreprocessorDirective(::std::result::Result<Preproc, LexError>),
-    Comment,
-    String(String),
-    Whitespace(String),
-    Char(char)
-}
 
 pub fn tokenize(code : &str) -> Result<Vec<Token>> {
     let mut code = code;
@@ -51,14 +62,19 @@ pub fn tokenize(code : &str) -> Result<Vec<Token>> {
 }
 
 named!(parse_token<Token>,
-    alt!(
-        parse_preproc |
-        parse_comment_line |
-        parse_comment_multiline |
-        parse_string |
-        parse_ws |
-        parse_word |
-        parse_char
+    do_parse!(
+        take_while!( |c| c == b' ' || c == b'\t' ) >>
+        token: alt!(
+            parse_preproc |
+            parse_comment_line |
+            parse_comment_multiline |
+            parse_string |
+            parse_ws |
+            parse_word |
+            parse_char
+        ) >>
+        take_while!( |c| c == b' ' || c == b'\t' ) >>
+        (token)
     )
 );
 
@@ -71,6 +87,8 @@ named!(parse_word<Token>,
             |s| Token::Word(s.to_string())
         )
 );
+
+
 named!(parse_comment_line<Token>, map!(delimited!( tag!("//"), take_until!("\n"), tag!("\n") ), |_| Token::Comment ));
 named!(parse_comment_multiline<Token>, map!(delimited!( tag!("/*"), take_until!("*/"), tag!("*/") ), |_| Token::Comment ));
 named!(parse_string<Token>, map!(
@@ -81,8 +99,8 @@ named!(parse_string<Token>, map!(
 named!(parse_char<Token>, map!(anychar, |c| Token::Char(c)));
 named!(parse_ws<Token>,
         map!(
-            map!(many1!( alt!( tag!(" ") | tag!("\n") | tag!("\t") | tag!("\r") ) ), |s| s[0]),
-            |s| Token::Whitespace(::std::str::from_utf8(s).unwrap().to_string())
+            alt!( tag!("\n") | tag!("\r\n") ),
+            |s| Token::Newline
         )
 );
 named!(parse_preproc<Token>,
@@ -92,41 +110,42 @@ named!(parse_preproc<Token>,
             p: take_while!(|c| is_alphanumeric(c) || c == b'_') >>
             (p)
         ), ::std::str::from_utf8),
-        |p| Token::PreprocessorDirective(Preproc::from_str(p))
+        |p| Token::PreprocessorDirective(PreprocessDirectiveName::from_str(p))
     )
 );
 
 #[test]
 fn test_tokenize() {
     use ::lexer::Token::*;
+    use ::lexer::PreprocessDirectiveName::*;
 
-    let code = "\
-
-#include \"header.h\"
+    let code = "#include \"header.h\"
 #define TEST 1.0f // Test definition
 
 /* Multiline
 comment\"
 */
 void frag() {
-    gl_Frag = vec4(vec3(1,1,1) * TEST, 1);
+\tgl_Frag = vec4(vec3(1,1,1) * TEST, 1);
 }
 ";
 
-    assert_eq!(tokenize(code), Ok(vec![PreprocessorDirective(Ok(Preproc::Include)), Whitespace(" ".to_string()),
-                                       String("header.h".to_string()), Whitespace("\n".to_string()), PreprocessorDirective(Ok(Preproc::Define)), Whitespace(" ".to_string()),
-                                       Word("TEST".to_string()), Whitespace(" ".to_string()), Word("1.0f".to_string()), Whitespace(" ".to_string()), Comment, Whitespace("\n".to_string()),
-                                       Comment, Whitespace("\n".to_string()), Word("void".to_string()), Whitespace(" ".to_string()), Word("frag".to_string()), Char('('),
-                                       Char(')'), Whitespace(" ".to_string()), Char('{'), Whitespace("\n".to_string()), Word("gl_Frag".to_string()), Whitespace(" ".to_string()),
-                                       Char('='), Whitespace(" ".to_string()), Word("vec4".to_string()), Char('('), Word("vec3".to_string()), Char('('), Word("1".to_string()),
-                                       Char(','), Word("1".to_string()), Char(','), Word("1".to_string()), Char(')'), Whitespace(" ".to_string()), Char('*'),
-                                       Whitespace(" ".to_string()), Word("TEST".to_string()), Char(','), Whitespace(" ".to_string()), Word("1".to_string()), Char(')'), Char(';'),
-                                       Whitespace("\n".to_string()), Char('}'), Whitespace("\n".to_string())]));
+    assert_eq!(tokenize(code), Ok(vec![
+        PreprocessorDirective(Ok(Include)), String("header.h".to_string()), Newline,
+        PreprocessorDirective(Ok(Define)), Word("TEST".to_string()), Word("1.0f".to_string()), Comment, Newline,
+        Comment, Newline,
+        Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'), Newline,
+
+        Word("gl_Frag".to_string()), Char('='), Word("vec4".to_string()), Char('('), Word("vec3".to_string()),
+        Char('('), Word("1".to_string()), Char(','), Word("1".to_string()), Char(','), Word("1".to_string()),
+        Char(')'), Char('*'), Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline,
+
+        Char('}'), Newline
+    ]));
 
     let code = "#pragma directive";
     assert_eq!(tokenize(code),
                Ok(vec![PreprocessorDirective(Err(LexError::UnspportedPreprocessor("pragma".to_string()))),
-                       Whitespace(" ".to_string()),
                        Word("directive".to_string())]));
 
 }
@@ -135,11 +154,11 @@ void frag() {
 fn test_token() {
     {
         let code = "\nsadasda";
-        assert_eq!(parse_token(code.as_bytes()), IResult::Done("sadasda".as_bytes(), Token::Whitespace("\n".to_string())));
+        assert_eq!(parse_token(code.as_bytes()), IResult::Done("sadasda".as_bytes(), Token::Newline));
     }
     {
         let code = "#include \"header.h\"";
-        assert_eq!(parse_token(code.as_bytes()), IResult::Done(" \"header.h\"".as_bytes(), Token::PreprocessorDirective(Ok(Preproc::Include))));
+        assert_eq!(parse_token(code.as_bytes()), IResult::Done("\"header.h\"".as_bytes(), Token::PreprocessorDirective(Ok(PreprocessDirectiveName::Include))));
     }
 }
 
@@ -177,6 +196,6 @@ fn test_string() {
 fn test_preproc() {
     let code = "#include \"./file.h\"";
 
-    assert_eq!(parse_preproc(code.as_bytes()), IResult::Done(" \"./file.h\"".as_bytes(), Token::PreprocessorDirective(Ok(Preproc::Include)) ) );
+    assert_eq!(parse_preproc(code.as_bytes()), IResult::Done(" \"./file.h\"".as_bytes(), Token::PreprocessorDirective(Ok(PreprocessDirectiveName::Include)) ) );
 
 }
