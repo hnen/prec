@@ -1,7 +1,7 @@
 [package]
-name = "shader-preproc"
-version = "0.1.0"
-authors = ["user"]
+name = "prec"
+version = "0.0.1"
+authors = ["Harri Hatinen <hhatinen@gmail.com>"]
 
 [dependencies]
 nom = "^3.2"

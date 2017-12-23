@@ -1,7 +1,7 @@
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ParseError {
     UnknownPreprocessorDirective(String),
     MissingParameter,
@@ -10,9 +10,16 @@ pub enum ParseError {
     UnknownError
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
+pub enum LexError {
+    UnspportedPreprocessor(String),
+    UnrecognizedPreprocessor(String),
+    Other
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Error {
-    LexingError,
+    LexingError(LexError),
     ParsingError(ParseError),
     None
 }
@@ -22,4 +29,12 @@ impl From<ParseError> for Error {
         Error::ParsingError(err)
     }
 }
+impl From<LexError> for Error {
+    fn from(err : LexError) -> Error {
+        Error::LexingError(err)
+    }
+}
+
+
+
 

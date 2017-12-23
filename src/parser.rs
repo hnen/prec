@@ -1,31 +1,28 @@
 
+use std::collections::HashMap;
 use lexer;
 use error::*;
 
-struct Define {
-    name  : String,
-    value : Option<String>
+pub struct Define<'a> {
+    name  : &'a str,
+    value : Option<&'a str>
 }
 
-struct Code {
-    code_expanded : String
+pub fn process<'a, F>(code : &str, defines : &[Define<'a>], file_loader : &mut F) -> Result<String>
+    where F : FnMut(&str) -> Option<String>
+{
+    let mut define_map = defines.iter().map(|d| (d.name, d.value) ).collect::<HashMap<_,_>>();
+
+    let code = lexer::tokenize(code)?;
+    let code = expand_includes(&code[..], file_loader)?;
+    let code = evaluate_defines(&code[..]);
+
+    unimplemented!();
 }
 
-impl Code {
-
-    pub fn new(code : &str) -> Code {
-        let _tokens = lexer::tokenize(code);
-        unimplemented!();
-    }
-
-    pub fn ifdefs<'a>(&'a self) -> &'a [Define] {
-        unimplemented!();
-    }
-
-    pub fn process(&self, _defines : &[Define]) -> String {
-        unimplemented!();
-    }
-
+fn evaluate_defines(code : &[lexer::Token]) -> Result<Vec<lexer::Token>> {
+    //let mut i = code.iter();
+    unimplemented!();
 }
 
 fn expand_includes<F>(tokens : &[lexer::Token], file_loader : &mut F) -> Result<Vec<lexer::Token>>
@@ -35,26 +32,20 @@ fn expand_includes<F>(tokens : &[lexer::Token], file_loader : &mut F) -> Result<
     let mut i = tokens.iter();
     while let Some(token) = i.next() {
         match token {
-            &lexer::Token::PreprocessorDirective(ref s) if s == "include" => {
-                match i.next() {
-                    Some(&lexer::Token::Whitespace(_)) =>
-                        match i.next() {
-                            Some(&lexer::Token::String(ref filename)) => {
-                                let file_contents = match file_loader(filename) {
-                                    Some(contents) => contents,
-                                    None => Err(ParseError::CantOpenFile)?
-                                };
-                                let file_tokens = lexer::tokenize(file_contents.as_str())?;
-                                let mut file_expanded = expand_includes(&file_tokens[..], file_loader)?;
-                                ret.append( &mut file_expanded );
-                            },
-                            _ => {
-                                Err(ParseError::MissingParameter)?
-                            }
-                        },
-                    _ => {
-                        Err(ParseError::ExpectedWhitespace)?
-                    }
+            &lexer::Token::PreprocessorDirective(Ok(s)) if s == lexer::Preproc::Include => {
+                let ws_token = i.next();
+                let filename_token = i.next();
+                if let (Some(&lexer::Token::Whitespace(_)),
+                        Some(&lexer::Token::String(ref filename))) = (ws_token, filename_token) {
+                    let file_contents = match file_loader(filename) {
+                        Some(contents) => contents,
+                        None => Err(ParseError::CantOpenFile)?
+                    };
+                    let file_tokens = lexer::tokenize(file_contents.as_str())?;
+                    let mut file_expanded = expand_includes(&file_tokens[..], file_loader)?;
+                    ret.append( &mut file_expanded );
+                } else {
+                    Err(ParseError::MissingParameter)?
                 }
             },
             _ => {
