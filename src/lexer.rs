@@ -1,46 +1,15 @@
 use nom::*;
 use error::*;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum PreprocessDirectiveName {
-    Include,
-    Define,
-    Undefine,
-
-    IfDefined,
-    IfNotDefined,
-    Else,
-    EndIf
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Word(String),
-    PreprocessorDirective(::std::result::Result<PreprocessDirectiveName, LexError>),
+    PreprocessorDirective(String),
     Comment,
     String(String),
     Newline,
     Char(char)
 }
-
-
-impl PreprocessDirectiveName {
-    fn from_str(s : &str) -> ::std::result::Result<PreprocessDirectiveName, LexError> {
-        Ok(match s {
-            "include" => PreprocessDirectiveName::Include,
-            "define" => PreprocessDirectiveName::Define,
-            "undef" => PreprocessDirectiveName::Undefine,
-            "ifdef" => PreprocessDirectiveName::IfDefined,
-            "ifndef" => PreprocessDirectiveName::IfNotDefined,
-            "else" => PreprocessDirectiveName::Else,
-            "endif" => PreprocessDirectiveName::EndIf,
-            "error" | "warning" | "if" | "elif" | "line" | "pragma"
-                => Err(LexError::UnspportedPreprocessor(s.to_string()))?,
-            _ => Err(LexError::UnrecognizedPreprocessor(s.to_string()))?
-        })
-    }
-}
-
 
 pub fn tokenize(code : &str) -> Result<Vec<Token>> {
     let mut code = code;
@@ -69,7 +38,7 @@ named!(parse_token<Token>,
             parse_comment_line |
             parse_comment_multiline |
             parse_string |
-            parse_ws |
+            parse_nl |
             parse_word |
             parse_char
         ) >>
@@ -97,7 +66,7 @@ named!(parse_string<Token>, map!(
         )
 );
 named!(parse_char<Token>, map!(anychar, |c| Token::Char(c)));
-named!(parse_ws<Token>,
+named!(parse_nl<Token>,
         map!(
             alt!( tag!("\n") | tag!("\r\n") ),
             |s| Token::Newline
@@ -110,14 +79,13 @@ named!(parse_preproc<Token>,
             p: take_while!(|c| is_alphanumeric(c) || c == b'_') >>
             (p)
         ), ::std::str::from_utf8),
-        |p| Token::PreprocessorDirective(PreprocessDirectiveName::from_str(p))
+        |p| Token::PreprocessorDirective(p.to_string())
     )
 );
 
 #[test]
 fn test_tokenize() {
     use ::lexer::Token::*;
-    use ::lexer::PreprocessDirectiveName::*;
 
     let code = "#include \"header.h\"
 #define TEST 1.0f // Test definition
@@ -131,8 +99,8 @@ void frag() {
 ";
 
     assert_eq!(tokenize(code), Ok(vec![
-        PreprocessorDirective(Ok(Include)), String("header.h".to_string()), Newline,
-        PreprocessorDirective(Ok(Define)), Word("TEST".to_string()), Word("1.0f".to_string()), Comment, Newline,
+        PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline,
+        PreprocessorDirective("define".to_string()), Word("TEST".to_string()), Word("1.0f".to_string()), Comment, Newline,
         Comment, Newline,
         Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'), Newline,
 
@@ -142,11 +110,6 @@ void frag() {
 
         Char('}'), Newline
     ]));
-
-    let code = "#pragma directive";
-    assert_eq!(tokenize(code),
-               Ok(vec![PreprocessorDirective(Err(LexError::UnspportedPreprocessor("pragma".to_string()))),
-                       Word("directive".to_string())]));
 
 }
 
@@ -158,7 +121,7 @@ fn test_token() {
     }
     {
         let code = "#include \"header.h\"";
-        assert_eq!(parse_token(code.as_bytes()), IResult::Done("\"header.h\"".as_bytes(), Token::PreprocessorDirective(Ok(PreprocessDirectiveName::Include))));
+        assert_eq!(parse_token(code.as_bytes()), IResult::Done("\"header.h\"".as_bytes(), Token::PreprocessorDirective("include".to_string())));
     }
 }
 
@@ -196,6 +159,6 @@ fn test_string() {
 fn test_preproc() {
     let code = "#include \"./file.h\"";
 
-    assert_eq!(parse_preproc(code.as_bytes()), IResult::Done(" \"./file.h\"".as_bytes(), Token::PreprocessorDirective(Ok(PreprocessDirectiveName::Include)) ) );
+    assert_eq!(parse_preproc(code.as_bytes()), IResult::Done(" \"./file.h\"".as_bytes(), Token::PreprocessorDirective("include".to_string()) ) );
 
 }

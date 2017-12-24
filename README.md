@@ -8,6 +8,6 @@ C Preprocessor Parser for Rust
   - \#if, \#elif
   - \#line 
 - Parser: Don't accept preprocessor directives not beginning of line
-- Lexer: Do not tokenize whitespaces, only newlines
 - Lexer: Make distinction between words and numerals
+- Lexer: Retain formatting (save whitespaces and comments)
 - Lexer: Support punctuators?

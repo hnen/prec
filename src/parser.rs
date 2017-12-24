@@ -1,6 +1,5 @@
 
 use lexer::Token;
-use lexer::PreprocessDirectiveName;
 use error::*;
 
 pub enum Item {
@@ -15,9 +14,9 @@ pub fn parse(tokens : &[Token]) -> Result<Vec<Item>> {
     let mut items = Vec::new();
     let mut i = tokens.iter();
     while let Some(token) = i.next() {
-        match *token {
-            Token::PreprocessorDirective(Ok(name)) => {
-                let item = parse_directive(&name, &mut i)?;
+        match token {
+            &Token::PreprocessorDirective(ref name) => {
+                let item = parse_directive(name.as_str(), &mut i)?;
                 items.push( item );
             },
             _ => unimplemented!()
@@ -27,11 +26,11 @@ pub fn parse(tokens : &[Token]) -> Result<Vec<Item>> {
     unimplemented!();
 }
 
-pub fn parse_directive<'a, I>(name : &PreprocessDirectiveName, i : &mut I) -> Result<Item>
+pub fn parse_directive<'a, I>(name : &str, i : &mut I) -> Result<Item>
         where I : Iterator<Item=&'a Token>
 {
-    match *name {
-        PreprocessDirectiveName::Include => {
+    match name {
+        "include" => {
             let ws0 = i.next();
             let filename = i.next();
             let ws1 = i.next();

@@ -23,9 +23,6 @@ pub fn process<'a, F>(code : &str, defines : &[Define], file_loader : &mut F) ->
     let define_map = defines.iter().map(|d| (d.name.clone(), d.value.clone()) ).collect::<HashMap<_,_>>();
 
     let code = lexer::tokenize(code)?;
-
-    validate_tokens(&code[..])?;
-
     let code = expand_includes(&code[..], file_loader)?;
     let code = evaluate_defines(&code[..], defines)?;
 
@@ -38,15 +35,6 @@ fn evaluate_defines<'a>(code : &[lexer::Token], defines : &[Define]) -> Result<V
     unimplemented!();
 }
 
-fn validate_tokens(code : &[lexer::Token]) -> Result<()> {
-    for t in code {
-        if let &lexer::Token::PreprocessorDirective(Err(ref e)) = t {
-            Err(e.clone())?;
-        }
-    }
-    Ok(())
-}
-
 fn expand_includes<F>(tokens : &[lexer::Token], file_loader : &mut F) -> Result<Vec<lexer::Token>>
         where F : FnMut(&str) -> Option<String>
 {
@@ -54,7 +42,7 @@ fn expand_includes<F>(tokens : &[lexer::Token], file_loader : &mut F) -> Result<
     let mut i = tokens.iter();
     while let Some(token) = i.next() {
         match token {
-            &lexer::Token::PreprocessorDirective(Ok(s)) if s == lexer::PreprocessDirectiveName::Include => {
+            &lexer::Token::PreprocessorDirective(ref s) if s == "include" => {
                 let filename_token = i.next();
                 if let Some(&lexer::Token::String(ref filename)) = filename_token {
                     let file_contents = match file_loader(filename) {
