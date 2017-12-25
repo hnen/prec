@@ -22,7 +22,7 @@ pub fn tokenize(code : &str) -> Result<Vec<Token>> {
                 rest
             },
             IResult::Error(_) | IResult::Incomplete(_) => {
-                Err(LexError::Other)?
+                Err(Error::LexingError)?
             }
         };
         code = remaining_code;
