@@ -11,3 +11,4 @@ C Preprocessor Parser for Rust
 - Lexer: Make distinction between words and numerals
 - Lexer: Retain formatting (save whitespaces and comments)
 - Lexer: Support punctuators?
+- Parser: Support computed includes

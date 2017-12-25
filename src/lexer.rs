@@ -7,7 +7,7 @@ pub enum Token {
     PreprocessorDirective(String),
     Comment,
     String(String),
-    Newline,
+    Newline{with_escape:bool},
     Char(char),
 }
 
@@ -58,7 +58,7 @@ named!(parse_word<Token>,
 
 
 named!(parse_comment_line<Token>,
-       map!(delimited!( tag!("//"), take_until!("\n"), tag!("\n") ), |_| Token::Comment ));
+       map!(delimited!( tag!("//"), take_until!("\n"), peek!(tag!("\n")) ), |_| Token::Comment ));
 
 named!(parse_comment_multiline<Token>,
        map!(delimited!( tag!("/*"), take_until!("*/"), tag!("*/") ), |_| Token::Comment ));
@@ -70,9 +70,20 @@ named!(parse_string<Token>, map!(
 );
 named!(parse_char<Token>, map!(anychar, |c| Token::Char(c)));
 named!(parse_nl<Token>,
-        map!(
-            alt!( tag!("\n") | tag!("\r\n") ),
-            |s| Token::Newline
+        alt!(
+            map!(
+                do_parse!(
+                    tag!("\\") >>
+                    take_while!(|c| c == b' ' || c == b'\t') >>
+                    alt!( tag!("\n") | tag!("\r\n") ) >>
+                    ()
+                ),
+                |s| Token::Newline{with_escape:true}
+            ) |
+            map!(
+                alt!( tag!("\n") | tag!("\r\n") ),
+                |s| Token::Newline{with_escape:false}
+            )
         )
 );
 named!(parse_preproc<Token>,
@@ -102,22 +113,24 @@ void frag() {
 ";
 
     assert_eq!(tokenize(code), Ok(vec![
-        PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline,
+        PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline{with_escape: false},
 
         PreprocessorDirective("define".to_string()), Word("TEST".to_string()),
-        Word("1.0f".to_string()), Comment, Newline,
+        Word("1.0f".to_string()), Comment, Newline{with_escape: false},
 
-        Comment, Newline,
+        Newline{with_escape: false},
+
+        Comment, Newline{with_escape: false},
 
         Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'),
-        Newline,
+        Newline{with_escape: false},
 
         Word("gl_Frag".to_string()), Char('='), Word("vec4".to_string()), Char('('),
         Word("vec3".to_string()), Char('('), Word("1".to_string()), Char(','),
         Word("1".to_string()), Char(','), Word("1".to_string()), Char(')'), Char('*'),
-        Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline,
+        Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline{with_escape: false},
 
-        Char('}'), Newline
+        Char('}'), Newline{with_escape: false}
     ]));
 
 }
@@ -127,7 +140,7 @@ fn test_token() {
     {
         let code = "\nsadasda";
         assert_eq!(parse_token(code.as_bytes()),
-                   IResult::Done("sadasda".as_bytes(), Token::Newline));
+                   IResult::Done("sadasda".as_bytes(), Token::Newline{with_escape: false}));
     }
     {
         let code = "#include \"header.h\"";
@@ -153,7 +166,7 @@ and some code";
     let code2 = "\tefsfes";
 
     assert_eq!(parse_comment_line(code.as_bytes()),
-               IResult::Done("and some code".as_bytes(), Token::Comment ));
+               IResult::Done("\nand some code".as_bytes(), Token::Comment ));
     assert_eq!(parse_comment_line(code2.as_bytes()), IResult::Error(ErrorKind::Tag));
 }
 #[test]

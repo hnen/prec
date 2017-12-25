@@ -36,6 +36,8 @@ where
     I: Iterator<Item = &'a Token>,
 {
     match name {
+        "undef" | "ifdef" | "ifndef" | "else" | "endif" | "if" | "elif" | "error" | "warning" |
+        "line" => Err(ParseError::UnspportedPreprocessor(name.to_string()))?,
         "include" => {
             let filename = i.next();
             if let Some(&Token::String(ref s)) = filename {
@@ -47,29 +49,43 @@ where
         "define" => {
             let symbol = i.next();
             if let Some(&Token::Word(ref s)) = symbol {
-                unimplemented!();
-//              let value = Vec::new();
-//              loop {
-//              }
+                let mut value = Vec::new();
+                loop {
+                    if let Some(token) = i.next() {
+                        match token {
+                            &Token::Newline{with_escape: false} => {
+                                break;
+                            },
+                            _ => {
+                                value.push(token.clone());
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                Ok(Item::Define(s.clone(), value))
             } else {
                 Err(ParseError::MissingParameter)?
             }
         }
-        "undef" | "ifdef" | "ifndef" | "else" | "endif" | "if" | "elif" | "error" | "warning" |
-        "line" => Err(ParseError::UnspportedPreprocessor(name.to_string()))?,
         _ => Err(ParseError::UnrecognizedPreprocessor(name.to_string()))?,
     }
 }
 
 #[test]
-fn test_parse() {
+fn test_parse_include() {
     let code = "#include \"../test.h\"";
     assert_eq!(
         parse(&::lexer::tokenize(code).unwrap()[..]),
         Ok(vec![Item::Include("../test.h".to_string())])
     );
+}
 
+#[test]
+fn test_parse_define() {
     let code = "#define TEST 0xFFFF // comment\nsome code";
+    //println!("{:?}", ::lexer::tokenize(code).unwrap());
     assert_eq!(
         parse(&::lexer::tokenize(code).unwrap()[..]),
         Ok(vec![
@@ -83,5 +99,4 @@ fn test_parse() {
             ]),
         ])
     );
-
 }
