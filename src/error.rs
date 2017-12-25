@@ -16,15 +16,11 @@ pub enum ParseError {
 pub enum Error {
     LexingError,
     ParsingError(ParseError),
-    None
+    None,
 }
 
 impl From<ParseError> for Error {
-    fn from(err : ParseError) -> Error {
+    fn from(err: ParseError) -> Error {
         Error::ParsingError(err)
     }
 }
-
-
-
-

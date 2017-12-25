@@ -8,10 +8,10 @@ pub enum Token {
     Comment,
     String(String),
     Newline,
-    Char(char)
+    Char(char),
 }
 
-pub fn tokenize(code : &str) -> Result<Vec<Token>> {
+pub fn tokenize(code: &str) -> Result<Vec<Token>> {
     let mut code = code;
     let mut ret = Vec::new();
     while code.len() > 0 {
@@ -20,10 +20,9 @@ pub fn tokenize(code : &str) -> Result<Vec<Token>> {
                 let rest = ::std::str::from_utf8(rest).unwrap();
                 ret.push(token);
                 rest
-            },
-            IResult::Error(_) | IResult::Incomplete(_) => {
-                Err(Error::LexingError)?
             }
+            IResult::Error(_) |
+            IResult::Incomplete(_) => Err(Error::LexingError)?,
         };
         code = remaining_code;
     }
@@ -58,10 +57,14 @@ named!(parse_word<Token>,
 );
 
 
-named!(parse_comment_line<Token>, map!(delimited!( tag!("//"), take_until!("\n"), tag!("\n") ), |_| Token::Comment ));
-named!(parse_comment_multiline<Token>, map!(delimited!( tag!("/*"), take_until!("*/"), tag!("*/") ), |_| Token::Comment ));
+named!(parse_comment_line<Token>,
+       map!(delimited!( tag!("//"), take_until!("\n"), tag!("\n") ), |_| Token::Comment ));
+
+named!(parse_comment_multiline<Token>,
+       map!(delimited!( tag!("/*"), take_until!("*/"), tag!("*/") ), |_| Token::Comment ));
+
 named!(parse_string<Token>, map!(
-            map_res!(delimited!( tag!("\""), take_until!("\""), tag!("\"") ), ::std::str::from_utf8 ),
+            map_res!(delimited!(tag!("\""), take_until!("\""), tag!("\"")), ::std::str::from_utf8),
             |s| Token::String(s.to_string())
         )
 );
@@ -85,7 +88,7 @@ named!(parse_preproc<Token>,
 
 #[test]
 fn test_tokenize() {
-    use ::lexer::Token::*;
+    use lexer::Token::*;
 
     let code = "#include \"header.h\"
 #define TEST 1.0f // Test definition
@@ -100,13 +103,19 @@ void frag() {
 
     assert_eq!(tokenize(code), Ok(vec![
         PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline,
-        PreprocessorDirective("define".to_string()), Word("TEST".to_string()), Word("1.0f".to_string()), Comment, Newline,
-        Comment, Newline,
-        Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'), Newline,
 
-        Word("gl_Frag".to_string()), Char('='), Word("vec4".to_string()), Char('('), Word("vec3".to_string()),
-        Char('('), Word("1".to_string()), Char(','), Word("1".to_string()), Char(','), Word("1".to_string()),
-        Char(')'), Char('*'), Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline,
+        PreprocessorDirective("define".to_string()), Word("TEST".to_string()),
+        Word("1.0f".to_string()), Comment, Newline,
+
+        Comment, Newline,
+
+        Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'),
+        Newline,
+
+        Word("gl_Frag".to_string()), Char('='), Word("vec4".to_string()), Char('('),
+        Word("vec3".to_string()), Char('('), Word("1".to_string()), Char(','),
+        Word("1".to_string()), Char(','), Word("1".to_string()), Char(')'), Char('*'),
+        Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline,
 
         Char('}'), Newline
     ]));
@@ -117,48 +126,57 @@ void frag() {
 fn test_token() {
     {
         let code = "\nsadasda";
-        assert_eq!(parse_token(code.as_bytes()), IResult::Done("sadasda".as_bytes(), Token::Newline));
+        assert_eq!(parse_token(code.as_bytes()),
+                   IResult::Done("sadasda".as_bytes(), Token::Newline));
     }
     {
         let code = "#include \"header.h\"";
-        assert_eq!(parse_token(code.as_bytes()), IResult::Done("\"header.h\"".as_bytes(), Token::PreprocessorDirective("include".to_string())));
+        assert_eq!(parse_token(code.as_bytes()),
+                   IResult::Done("\"header.h\"".as_bytes(),
+                                 Token::PreprocessorDirective("include".to_string())));
     }
 }
 
 #[test]
 fn test_word() {
-    assert_eq!(parse_word("1.0f 2.0f".as_bytes()), IResult::Done(" 2.0f".as_bytes(), Token::Word("1.0f".to_string()) ));
-    assert_eq!(parse_word("hello, world".as_bytes()), IResult::Done(", world".as_bytes(), Token::Word("hello".to_string()) ));
+    assert_eq!(parse_word("1.0f 2.0f".as_bytes()),
+               IResult::Done(" 2.0f".as_bytes(), Token::Word("1.0f".to_string()) ));
+    assert_eq!(parse_word("hello, world".as_bytes()),
+               IResult::Done(", world".as_bytes(), Token::Word("hello".to_string()) ));
 }
 #[test]
 fn test_comment_line() {
 
-    let code =
-        "// Comment
+    let code = "// Comment
 and some code";
 
     let code2 = "\tefsfes";
 
-    assert_eq!(parse_comment_line(code.as_bytes()), IResult::Done("and some code".as_bytes(), Token::Comment ));
+    assert_eq!(parse_comment_line(code.as_bytes()),
+               IResult::Done("and some code".as_bytes(), Token::Comment ));
     assert_eq!(parse_comment_line(code2.as_bytes()), IResult::Error(ErrorKind::Tag));
 }
 #[test]
 fn test_comment_multiline() {
     let code = "/* jsdfoisjd \
     fsd , #! f */ and then some";
-    assert_eq!(parse_comment_multiline(code.as_bytes()), IResult::Done(" and then some".as_bytes(), Token::Comment));
+    assert_eq!(parse_comment_multiline(code.as_bytes()),
+               IResult::Done(" and then some".as_bytes(), Token::Comment));
 }
 
 #[test]
 fn test_string() {
     let code = "\"rabadaba\" and then some()";
-    assert_eq!(parse_string(code.as_bytes()), IResult::Done(" and then some()".as_bytes(), Token::String("rabadaba".to_string())) );
+    assert_eq!(parse_string(code.as_bytes()),
+               IResult::Done(" and then some()".as_bytes(), Token::String("rabadaba".to_string())));
 }
 
 #[test]
 fn test_preproc() {
     let code = "#include \"./file.h\"";
 
-    assert_eq!(parse_preproc(code.as_bytes()), IResult::Done(" \"./file.h\"".as_bytes(), Token::PreprocessorDirective("include".to_string()) ) );
+    assert_eq!(parse_preproc(code.as_bytes()),
+               IResult::Done(" \"./file.h\"".as_bytes(),
+                             Token::PreprocessorDirective("include".to_string()) ) );
 
 }
