@@ -19,22 +19,48 @@ pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
     let mut items = Vec::new();
     let mut i = tokens.iter();
     while let Some(token) = i.next() {
-        match token {
+        let item = match token {
             &Token::PreprocessorDirective(ref name) => {
-                let item = parse_directive(name.as_str(), &mut i)?;
-                items.push(item);
+                parse_directive(name.as_str(), &mut i)?
             }
-            _ => unimplemented!("token: {:?}", token),
-        }
+            _ => {
+                parse_text(token, &mut i)?
+            }
+        };
+        items.push(item);
     }
 
     Ok(items)
 }
 
+pub fn parse_text<'a, I>(first_token: &Token, i: &mut I) -> Result<Item>
+    where
+        I: Iterator<Item = &'a Token>
+{
+    let mut text = vec![first_token.clone()];
+    let mut i = i.peekable();
+    loop {
+        if let Some(&&Token::PreprocessorDirective(_)) = i.peek() {
+            break;
+        }
+        match i.next() {
+            Some(token) => {
+                text.push(token.clone());
+            },
+            None => {
+                break;
+            }
+        }
+    }
+    Ok(Item::Text(text))
+}
+
+
 pub fn parse_directive<'a, I>(name: &str, i: &mut I) -> Result<Item>
 where
     I: Iterator<Item = &'a Token>,
 {
+    //let i = i.peekable();
     match name {
         "undef" | "ifdef" | "ifndef" | "else" | "endif" | "if" | "elif" | "error" | "warning" |
         "line" => Err(ParseError::UnspportedPreprocessor(name.to_string()))?,
@@ -85,13 +111,14 @@ fn test_parse_include() {
 #[test]
 fn test_parse_define() {
     let code = "#define TEST 0xFFFF // comment\nsome code";
-    //println!("{:?}", ::lexer::tokenize(code).unwrap());
+    let tokens = ::lexer::tokenize(code).unwrap();
+    println!("{:?}", tokens);
     assert_eq!(
-        parse(&::lexer::tokenize(code).unwrap()[..]),
+        parse(&tokens[..]),
         Ok(vec![
             Item::Define(
                 "TEST".to_string(),
-                vec![Token::Word("0xFFFF".to_string())]
+                vec![Token::Word("0xFFFF".to_string()), Token::Comment]
             ),
             Item::Text(vec![
                 Token::Word("some".to_string()),
