@@ -58,47 +58,75 @@ pub fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Ite
 
 
 pub fn parse_directive<'a, I>(name: &str, i: &mut I) -> Result<Item>
-where
-    I: Iterator<Item = &'a Token>,
+    where I: Iterator<Item = &'a Token>,
 {
-    //let i = i.peekable();
     match name {
-        "undef" | "ifdef" | "ifndef" | "else" | "endif" | "if" | "elif" | "error" | "warning" |
+        "if" | "elif" | "error" | "warning" |
         "line" => Err(ParseError::UnspportedPreprocessor(name.to_string()))?,
         "include" => {
+            // TODO: Accept symbol as well
             let filename = i.next();
             if let Some(&Token::String(ref s)) = filename {
                 Ok(Item::Include(s.clone()))
             } else {
                 Err(ParseError::MissingParameter)?
             }
-        }
+        },
         "define" => {
+            parse_define(i)
+        },
+        "undef" => {
             let symbol = i.next();
             if let Some(&Token::Word(ref s)) = symbol {
-                let mut value = Vec::new();
-                loop {
-                    if let Some(token) = i.next() {
-                        match token {
-                            &Token::Newline{with_escape: false} => {
-                                break;
-                            },
-                            _ => {
-                                value.push(token.clone());
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                Ok(Item::Define(s.clone(), value))
+                Ok(Item::Undefine(s.clone()))
             } else {
                 Err(ParseError::MissingParameter)?
             }
-        }
+        },
+        "ifdef" | "ifndef" => {
+            parse_conditional(i, name)
+        },
+        "else" | "endif" => {
+            Err(ParseError::UnexpectedPreprocessor(name.to_string()))?
+        },
         _ => Err(ParseError::UnrecognizedPreprocessor(name.to_string()))?,
     }
 }
+
+pub fn parse_conditional<'a, I>(i: &mut I, directive_name : &str) -> Result<Item>
+    where I: Iterator<Item = &'a Token>
+{
+    let symbol = i.next();
+    unimplemented!();
+}
+
+
+pub fn parse_define<'a, I>(i: &mut I) -> Result<Item>
+    where I: Iterator<Item = &'a Token>
+{
+    let symbol = i.next();
+    if let Some(&Token::Word(ref s)) = symbol {
+        let mut value = Vec::new();
+        loop {
+            if let Some(token) = i.next() {
+                match token {
+                    &Token::Newline { with_escape: false } => {
+                        break;
+                    },
+                    _ => {
+                        value.push(token.clone());
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        Ok(Item::Define(s.clone(), value))
+    } else {
+        Err(ParseError::MissingParameter)?
+    }
+}
+
 
 #[test]
 fn test_parse_include() {
@@ -106,6 +134,15 @@ fn test_parse_include() {
     assert_eq!(
         parse(&::lexer::tokenize(code).unwrap()[..]),
         Ok(vec![Item::Include("../test.h".to_string())])
+    );
+}
+
+#[test]
+fn test_parse_undef() {
+    let code = "#undef TEST";
+    assert_eq!(
+        parse(&::lexer::tokenize(code).unwrap()[..]),
+        Ok(vec![Item::Undefine("TEST".to_string())])
     );
 }
 
