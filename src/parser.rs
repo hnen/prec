@@ -1,6 +1,7 @@
 
 use lexer::Token;
 use error::*;
+use std::iter::Peekable;
 
 #[derive(Debug, PartialEq)]
 pub enum Item {
@@ -18,11 +19,12 @@ pub enum Item {
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
     let mut items = Vec::new();
     let mut i = tokens.iter();
+    let mut i = i.peekable();
     while let Some(token) = i.next() {
         let item = match token {
             &Token::PreprocessorDirective(ref name) => {
                 parse_directive(name.as_str(), &mut i)?
-            }
+            },
             _ => {
                 parse_text(token, &mut i)?
             }
@@ -33,12 +35,11 @@ pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
     Ok(items)
 }
 
-pub fn parse_text<'a, I>(first_token: &Token, i: &mut I) -> Result<Item>
+pub fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
     where
         I: Iterator<Item = &'a Token>
 {
     let mut text = vec![first_token.clone()];
-    let mut i = i.peekable();
     loop {
         if let Some(&&Token::PreprocessorDirective(_)) = i.peek() {
             break;
@@ -111,14 +112,56 @@ fn test_parse_include() {
 #[test]
 fn test_parse_define() {
     let code = "#define TEST 0xFFFF // comment\nsome code";
-    let tokens = ::lexer::tokenize(code).unwrap();
-    println!("{:?}", tokens);
     assert_eq!(
-        parse(&tokens[..]),
+        parse(&::lexer::tokenize(code).unwrap()[..]),
         Ok(vec![
             Item::Define(
                 "TEST".to_string(),
                 vec![Token::Word("0xFFFF".to_string()), Token::Comment]
+            ),
+            Item::Text(vec![
+                Token::Word("some".to_string()),
+                Token::Word("code".to_string()),
+            ]),
+        ])
+    );
+
+    let code = "some code\n#define TEST 0xFFFF";
+    let token = ::lexer::tokenize(code).unwrap();
+    println!("{:?}", token);
+    assert_eq!(
+        parse(&token[..]),
+        Ok(vec![
+            Item::Text(vec![
+                Token::Word("some".to_string()),
+                Token::Word("code".to_string()),
+                Token::Newline {with_escape: false}
+            ]),
+            Item::Define(
+                "TEST".to_string(),
+                vec![Token::Word("0xFFFF".to_string())]
+            )
+        ])
+    );
+
+    let code = "some code\n#define TEST 0xFFFF\\\n0xFFFE\nsome code";
+    let token = ::lexer::tokenize(code).unwrap();
+    println!("{:?}", token);
+    assert_eq!(
+        parse(&token[..]),
+        Ok(vec![
+            Item::Text(vec![
+                Token::Word("some".to_string()),
+                Token::Word("code".to_string()),
+                Token::Newline {with_escape: false}
+            ]),
+            Item::Define(
+                "TEST".to_string(),
+                vec![
+                    Token::Word("0xFFFF".to_string()),
+                    Token::Newline {with_escape: true},
+                    Token::Word("0xFFFE".to_string()),
+                ]
             ),
             Item::Text(vec![
                 Token::Word("some".to_string()),
