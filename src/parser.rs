@@ -11,31 +11,57 @@ pub enum Item {
     Undefine(String),
     Conditional {
         define_name: String,
-        defined: Vec<Token>,
-        not_defined: Vec<Token>,
+        defined: Vec<Item>,
+        not_defined: Vec<Item>,
     },
 }
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
-    let mut items = Vec::new();
     let mut i = tokens.iter();
-    let mut i = i.peekable();
-    while let Some(token) = i.next() {
-        let item = match token {
-            &Token::PreprocessorDirective(ref name) => {
-                parse_directive(name.as_str(), &mut i)?
-            },
-            _ => {
-                parse_text(token, &mut i)?
-            }
-        };
-        items.push(item);
-    }
+    let (result, _) = parse_from_iter(&mut i, 0)?;
+    Ok(result)
 
-    Ok(items)
 }
 
-pub fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
+fn parse_from_iter<'a, I>(i : &mut I, depth: i32) -> Result<(Vec<Item>, Option<String>)>
+    where I: Iterator<Item = &'a Token>
+{
+    let mut items = Vec::new();
+    let mut i = i.peekable();
+    let directive = loop {
+        match i.next() {
+            Some(token) => {
+                let item = match token {
+                    &Token::PreprocessorDirective(ref name) => {
+                        if depth > 0 {
+                            match name.as_str() {
+                                "else" | "endif" => {
+                                    break Some(name.clone());
+                                },
+                                name => parse_directive(name, &mut i, depth)?
+                           }
+                        } else {
+                            parse_directive(name.as_str(), &mut i, depth)?
+                        }
+                    },
+                    _ => {
+                        parse_text(token, &mut i)?
+                        //Item::Text(vec![])
+                    }
+                };
+                items.push(item);
+            },
+            None => {
+                break None;
+            }
+        }
+    };
+
+    Ok((items, directive))
+
+}
+
+fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
     where
         I: Iterator<Item = &'a Token>
 {
@@ -57,7 +83,7 @@ pub fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Ite
 }
 
 
-pub fn parse_directive<'a, I>(name: &str, i: &mut I) -> Result<Item>
+fn parse_directive<'a, I>(name: &str, i: &mut I, depth: i32) -> Result<Item>
     where I: Iterator<Item = &'a Token>,
 {
     match name {
@@ -84,7 +110,7 @@ pub fn parse_directive<'a, I>(name: &str, i: &mut I) -> Result<Item>
             }
         },
         "ifdef" | "ifndef" => {
-            parse_conditional(i, name)
+            parse_conditional(i, name, depth)
         },
         "else" | "endif" => {
             Err(ParseError::UnexpectedPreprocessor(name.to_string()))?
@@ -93,15 +119,16 @@ pub fn parse_directive<'a, I>(name: &str, i: &mut I) -> Result<Item>
     }
 }
 
-pub fn parse_conditional<'a, I>(i: &mut I, directive_name : &str) -> Result<Item>
+fn parse_conditional<'a, I>(i: &mut I, directive_name : &str, depth: i32) -> Result<Item>
     where I: Iterator<Item = &'a Token>
 {
     let symbol = i.next();
+    let (items, closing_directive) = parse_from_iter(i, depth+1)?;
     unimplemented!();
 }
 
 
-pub fn parse_define<'a, I>(i: &mut I) -> Result<Item>
+fn parse_define<'a, I>(i: &mut I) -> Result<Item>
     where I: Iterator<Item = &'a Token>
 {
     let symbol = i.next();
