@@ -12,7 +12,7 @@ pub enum Token<'a> {
     Char(char),
 }
 
-pub fn tokenize(code: &str) -> Result<Vec<Token>> {
+pub fn tokenize<'a>(code: &'a str) -> Result<Vec<Token<'a>>> {
     let mut code = code;
     let mut ret = Vec::new();
     while code.len() > 0 {

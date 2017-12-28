@@ -5,7 +5,7 @@ extern crate nom;
 mod error;
 mod lexer;
 mod parser;
-//mod processor;
+mod processor;
 
 pub use lexer::tokenize;
 pub use parser::parse;

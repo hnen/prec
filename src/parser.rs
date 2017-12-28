@@ -22,7 +22,6 @@ pub fn parse<'a>(tokens: &'a [Token]) -> Result<Vec<Item<'a>>> {
     let i = tokens.iter();
     let (result, _) = parse_block(&mut i.peekable(), 0)?;
     Ok(result)
-
 }
 
 fn parse_block<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>, Option<Cow<'a, str>>)>
@@ -57,8 +56,7 @@ fn parse_block<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>
 }
 
 fn is_closing_directive<'a, I>(i : &mut Peekable<I>, name : &str) -> Result<bool>
-    where
-        I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = &'a Token<'a>>
 {
     match name.deref() {
         "else" | "endif" => {
@@ -77,8 +75,7 @@ fn is_closing_directive<'a, I>(i : &mut Peekable<I>, name : &str) -> Result<bool
 
 
 fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item<'a>>
-    where
-        I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = &'a Token<'a>>
 {
     let mut text = vec![first_token.clone()];
     loop {
@@ -99,7 +96,7 @@ fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item
 
 
 fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item<'a>>
-    where I: Iterator<Item = &'a Token<'a>>,
+    where I: Iterator<Item = &'a Token<'a>>
 {
     match name {
         "if" | "elif" | "error" | "warning" |
@@ -134,7 +131,7 @@ fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -
     }
 }
 
-fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i32) -> Result<Item<'a>>
+fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name: &str, depth: i32) -> Result<Item<'a>>
     where I: Iterator<Item = &'a Token<'a>>
 {
     let symbol = i.next();
