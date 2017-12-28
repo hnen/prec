@@ -2,29 +2,34 @@
 use lexer::Token;
 use error::*;
 use std::iter::Peekable;
+use std::borrow::Cow;
+use std::ops::Deref;
 
 #[derive(Debug, PartialEq)]
-pub enum Item {
-    Text(Vec<Token>),
-    Include(String),
-    Define(String, Vec<Token>),
-    Undefine(String),
+pub enum Item<'a> {
+    Text(Vec<Token<'a>>),
+    Include(Cow<'a, str>),
+    Define(Cow<'a, str>, Vec<Token<'a>>),
+    Undefine(Cow<'a, str>),
     Conditional {
-        define_name: String,
-        defined: Vec<Item>,
-        not_defined: Vec<Item>,
+        define_name: Cow<'a, str>
+
+        ,
+        defined: Vec<Item<'a>>,
+        not_defined: Vec<Item<'a>>,
     },
 }
 
-pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
-    let mut i = tokens.iter();
+pub fn parse<'a>(tokens: &'a [Token]) -> Result<Vec<Item<'a>>> {
+    let
+    i = tokens.iter();
     let (result, _) = parse_from_iter(&mut i.peekable(), 0)?;
     Ok(result)
 
 }
 
-fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>, Option<String>)>
-    where I: Iterator<Item = &'a Token>
+fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>, Option<Cow<'a, str>>)>
+    where I: Iterator<Item = &'a Token<'a>>
 {
     let mut items = Vec::new();
     let directive = loop {
@@ -33,7 +38,7 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>
                 let item = match token {
                     &Token::PreprocessorDirective(ref name) => {
                         if depth > 0 {
-                            match name.as_str() {
+                            match name.deref() {
                                 "else" | "endif" => {
                                     match i.next() {
                                         Some(&Token::Newline{with_escape:false}) | None => {
@@ -47,12 +52,11 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>
                                 name => parse_directive(name, i, depth)?
                             }
                         } else {
-                            parse_directive(name.as_str(), i, depth)?
+                            parse_directive(name, i, depth)?
                         }
                     },
                     _ => {
                         parse_text(token, i)?
-                        //Item::Text(vec![])
                     }
                 };
                 items.push(item);
@@ -67,9 +71,9 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>
 
 }
 
-fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
+fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item<'a>>
     where
-        I: Iterator<Item = &'a Token>
+        I: Iterator<Item = &'a Token<'a>>
 {
     let mut text = vec![first_token.clone()];
     loop {
@@ -89,8 +93,8 @@ fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
 }
 
 
-fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item>
-    where I: Iterator<Item = &'a Token>,
+fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item<'a>>
+    where I: Iterator<Item = &'a Token<'a>>,
 {
     match name {
         "if" | "elif" | "error" | "warning" |
@@ -99,7 +103,7 @@ fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result
             // TODO: Accept symbol as well
             let filename = i.next();
             if let Some(&Token::String(ref s)) = filename {
-                Ok(Item::Include(s.clone()))
+                Ok(Item::Include(Cow::Borrowed(s)))
             } else {
                 Err(ParseError::MissingParameter)?
             }
@@ -125,20 +129,20 @@ fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result
     }
 }
 
-fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i32) -> Result<Item>
-    where I: Iterator<Item = &'a Token>
+fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i32) -> Result<Item<'a>>
+    where I: Iterator<Item = &'a Token<'a>>
 {
     let symbol = i.next();
     if let Some(&Token::Word(ref symbol)) = symbol {
         if let Some(&Token::Newline {with_escape:false}) = i.next() {
             let (items, closing_directive) = parse_from_iter(i, depth + 1)?;
-            let items2 = match closing_directive.as_ref().map(|a| a.as_str()) {
+            let items2 = match closing_directive.as_ref().map(|a| a.deref()) {
                 Some("endif") => {
                     vec![]
                 },
                 Some("else") => {
                     let (items2, closing_directive) = parse_from_iter(i, depth + 1)?;
-                    match closing_directive.as_ref().map(|a| a.as_str()) {
+                    match closing_directive.as_ref().map(|a| a.deref()) {
                         Some("endif") => items2,
                         _ => Err(ParseError::ElseWithoutEndif)?
                     }
@@ -151,14 +155,14 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i
             match directive_name {
                 "ifdef" => {
                     Ok(Item::Conditional {
-                        define_name: symbol.to_string(),
+                        define_name: Cow::Borrowed(symbol),
                         defined: items,
                         not_defined: items2
                     })
                 },
                 "ifndef" => {
                     Ok(Item::Conditional {
-                        define_name: symbol.to_string(),
+                        define_name: Cow::Borrowed(symbol),
                         defined: items2,
                         not_defined: items
                     })
@@ -174,8 +178,8 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i
 }
 
 
-fn parse_define<'a, I>(i: &mut I) -> Result<Item>
-    where I: Iterator<Item = &'a Token>
+fn parse_define<'a, I>(i: &mut I) -> Result<Item<'a>>
+    where I: Iterator<Item = &'a Token<'a>>
 {
     let symbol = i.next();
     if let Some(&Token::Word(ref s)) = symbol {
@@ -217,10 +221,10 @@ defined
 
     let result = Ok(vec![
         Item::Conditional {
-            define_name: "TEST".to_string(),
-            defined: vec![Item::Text(vec![Token::Word("defined".to_string()),
+            define_name: Cow::Borrowed("TEST"),
+            defined: vec![Item::Text(vec![Token::Word(Cow::Borrowed("defined")),
                                           Token::Newline {with_escape: false}])],
-            not_defined: vec![Item::Text(vec![Token::Word("undefined".to_string()),
+            not_defined: vec![Item::Text(vec![Token::Word(Cow::Borrowed("undefined")),
                                               Token::Newline {with_escape: false}])],
         }
     ]);
@@ -245,17 +249,20 @@ fn test_parse_conditional_nested() {
 
     let result = Ok(vec![
         Item::Conditional {
-            define_name: "__TEST".to_string(),
+            define_name: Cow::Borrowed("__TEST"),
             defined: vec![
-                Item::Text(vec![Token::Word("section4".to_string()), Token::Newline {with_escape:false}]),
+                Item::Text(vec![Token::Word(Cow::Borrowed("section4")), Token::Newline {with_escape:false}]),
                 Item::Conditional{
-                    define_name: "ANOTHER_TEST".to_string(),
+                    define_name: Cow::Borrowed("ANOTHER_TEST"),
                     defined: vec![],
-                    not_defined: vec![Item::Text(vec![Token::Word("section1".to_string()), Token::Newline {with_escape:false}])]
+                    not_defined: vec![Item::Text(vec![Token::Word(Cow::Borrowed("section1")),
+                                                      Token::Newline {with_escape:false}])]
                 },
-                Item::Text(vec![Token::Word("section2".to_string()), Token::Newline {with_escape:false}])
+                Item::Text(vec![Token::Word(Cow::Borrowed("section2")),
+                                Token::Newline {with_escape:false}])
             ],
-            not_defined: vec![Item::Text(vec![Token::Word("section3".to_string()), Token::Newline {with_escape:false}])],
+            not_defined: vec![Item::Text(vec![Token::Word(Cow::Borrowed("section3")),
+                                              Token::Newline {with_escape:false}])],
         }
     ]);
 
@@ -268,7 +275,7 @@ fn test_parse_include() {
     let code = "#include \"../test.h\"";
     assert_eq!(
         parse(&::lexer::tokenize(code).unwrap()[..]),
-        Ok(vec![Item::Include("../test.h".to_string())])
+        Ok(vec![Item::Include(Cow::Borrowed("../test.h"))])
     );
 }
 
@@ -277,7 +284,7 @@ fn test_parse_undef() {
     let code = "#undef TEST";
     assert_eq!(
         parse(&::lexer::tokenize(code).unwrap()[..]),
-        Ok(vec![Item::Undefine("TEST".to_string())])
+        Ok(vec![Item::Undefine(Cow::Borrowed("TEST"))])
     );
 }
 
@@ -288,12 +295,12 @@ fn test_parse_define() {
         parse(&::lexer::tokenize(code).unwrap()[..]),
         Ok(vec![
             Item::Define(
-                "TEST".to_string(),
-                vec![Token::Word("0xFFFF".to_string())]
+                Cow::Borrowed("TEST"),
+                vec![Token::Word(Cow::Borrowed("0xFFFF"))]
             ),
             Item::Text(vec![
-                Token::Word("some".to_string()),
-                Token::Word("code".to_string()),
+                Token::Word(Cow::Borrowed("some")),
+                Token::Word(Cow::Borrowed("code")),
             ]),
         ])
     );
@@ -305,13 +312,13 @@ fn test_parse_define() {
         parse(&token[..]),
         Ok(vec![
             Item::Text(vec![
-                Token::Word("some".to_string()),
-                Token::Word("code".to_string()),
+                Token::Word(Cow::Borrowed("some")),
+                Token::Word(Cow::Borrowed("code")),
                 Token::Newline {with_escape: false}
             ]),
             Item::Define(
-                "TEST".to_string(),
-                vec![Token::Word("0xFFFF".to_string())]
+                Cow::Borrowed("TEST"),
+                vec![Token::Word(Cow::Borrowed("0xFFFF"))]
             )
         ])
     );
@@ -323,21 +330,21 @@ fn test_parse_define() {
         parse(&token[..]),
         Ok(vec![
             Item::Text(vec![
-                Token::Word("some".to_string()),
-                Token::Word("code".to_string()),
+                Token::Word(Cow::Borrowed("some")),
+                Token::Word(Cow::Borrowed("code")),
                 Token::Newline {with_escape: false}
             ]),
             Item::Define(
-                "TEST".to_string(),
+                Cow::Borrowed("TEST"),
                 vec![
-                    Token::Word("0xFFFF".to_string()),
+                    Token::Word(Cow::Borrowed("0xFFFF")),
                     Token::Newline {with_escape: true},
-                    Token::Word("0xFFFE".to_string()),
+                    Token::Word(Cow::Borrowed("0xFFFE")),
                 ]
             ),
             Item::Text(vec![
-                Token::Word("some".to_string()),
-                Token::Word("code".to_string()),
+                Token::Word(Cow::Borrowed("some")),
+                Token::Word(Cow::Borrowed("code")),
             ]),
         ])
     );

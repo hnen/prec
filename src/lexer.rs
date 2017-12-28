@@ -1,12 +1,13 @@
 use nom::*;
 use error::*;
+use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    Word(String),
-    PreprocessorDirective(String),
+pub enum Token<'a> {
+    Word(Cow<'a, str>),
+    PreprocessorDirective(Cow<'a, str>),
     Comment,
-    String(String),
+    String(Cow<'a, str>),
     Newline{with_escape:bool},
     Char(char),
 }
@@ -57,7 +58,7 @@ named!(parse_word<Token>,
                 take_while1!(|c| is_alphanumeric(c) || c == b'.' || c == b'\'' || c == b'_'),
                 ::std::str::from_utf8
             ),
-            |s| Token::Word(s.to_string())
+            |s| Token::Word(Cow::Borrowed(s))
         )
 );
 
@@ -70,7 +71,7 @@ named!(parse_comment_multiline<Token>,
 
 named!(parse_string<Token>, map!(
             map_res!(delimited!(tag!("\""), take_until!("\""), tag!("\"")), ::std::str::from_utf8),
-            |s| Token::String(s.to_string())
+            |s| Token::String(Cow::Borrowed(s))
         )
 );
 named!(parse_char<Token>, map!(anychar, |c| Token::Char(c)));
@@ -98,7 +99,7 @@ named!(parse_preproc<Token>,
             p: take_while!(|c| is_alphanumeric(c) || c == b'_') >>
             (p)
         ), ::std::str::from_utf8),
-        |p| Token::PreprocessorDirective(p.to_string())
+        |p| Token::PreprocessorDirective(Cow::Borrowed(p))
     )
 );
 
@@ -118,22 +119,24 @@ void frag() {
 ";
 
     assert_eq!(tokenize(code), Ok(vec![
-        PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline{with_escape: false},
+        PreprocessorDirective(Cow::Borrowed("include")), String(Cow::Borrowed("header.h")),
+        Newline{with_escape: false},
 
-        PreprocessorDirective("define".to_string()), Word("TEST".to_string()),
-        Word("1.0f".to_string()), Newline{with_escape: false},
+        PreprocessorDirective(Cow::Borrowed("define")), Word(Cow::Borrowed("TEST")),
+        Word(Cow::Borrowed("1.0f")), Newline{with_escape: false},
 
         Newline{with_escape: false},
 
         Newline{with_escape: false},
 
-        Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'),
+        Word(Cow::Borrowed("void")), Word(Cow::Borrowed("frag")), Char('('), Char(')'), Char('{'),
         Newline{with_escape: false},
 
-        Word("gl_Frag".to_string()), Char('='), Word("vec4".to_string()), Char('('),
-        Word("vec3".to_string()), Char('('), Word("1".to_string()), Char(','),
-        Word("1".to_string()), Char(','), Word("1".to_string()), Char(')'), Char('*'),
-        Word("TEST".to_string()), Char(','), Word("1".to_string()), Char(')'), Char(';'), Newline{with_escape: false},
+        Word(Cow::Borrowed("gl_Frag")), Char('='), Word(Cow::Borrowed("vec4")), Char('('),
+        Word(Cow::Borrowed("vec3")), Char('('), Word(Cow::Borrowed("1")), Char(','),
+        Word(Cow::Borrowed("1")), Char(','), Word(Cow::Borrowed("1")), Char(')'), Char('*'),
+        Word(Cow::Borrowed("TEST")), Char(','), Word(Cow::Borrowed("1")), Char(')'), Char(';'),
+        Newline{with_escape: false},
 
         Char('}'), Newline{with_escape: false}
     ]));
@@ -151,16 +154,18 @@ fn test_token() {
         let code = "#include \"header.h\"";
         assert_eq!(parse_token(code.as_bytes()),
                    IResult::Done("\"header.h\"".as_bytes(),
-                                 Token::PreprocessorDirective("include".to_string())));
+                                 Token::PreprocessorDirective(Cow::Borrowed("include"))
+                   )
+        );
     }
 }
 
 #[test]
 fn test_word() {
     assert_eq!(parse_word("1.0f 2.0f".as_bytes()),
-               IResult::Done(" 2.0f".as_bytes(), Token::Word("1.0f".to_string()) ));
+               IResult::Done(" 2.0f".as_bytes(), Token::Word(Cow::Borrowed("1.0f")) ));
     assert_eq!(parse_word("hello, world".as_bytes()),
-               IResult::Done(", world".as_bytes(), Token::Word("hello".to_string()) ));
+               IResult::Done(", world".as_bytes(), Token::Word(Cow::Borrowed("hello")) ));
 }
 #[test]
 fn test_comment_line() {
@@ -186,7 +191,7 @@ fn test_comment_multiline() {
 fn test_string() {
     let code = "\"rabadaba\" and then some()";
     assert_eq!(parse_string(code.as_bytes()),
-               IResult::Done(" and then some()".as_bytes(), Token::String("rabadaba".to_string())));
+               IResult::Done(" and then some()".as_bytes(), Token::String(Cow::Borrowed("rabadaba"))));
 }
 
 #[test]
@@ -195,6 +200,6 @@ fn test_preproc() {
 
     assert_eq!(parse_preproc(code.as_bytes()),
                IResult::Done(" \"./file.h\"".as_bytes(),
-                             Token::PreprocessorDirective("include".to_string()) ) );
+                             Token::PreprocessorDirective(Cow::Borrowed("include")) ) );
 
 }
