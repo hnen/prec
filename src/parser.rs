@@ -35,17 +35,17 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>
                         if depth > 0 {
                             match name.as_str() {
                                 "else" | "endif" => {
-                                    let next = i.next();
-                                    if let Some(&Token::Newline{with_escape:false}) = next {
-                                        break Some(name.clone());
-                                    } else if next == None {
-                                        break Some(name.clone());
-                                    } else {
-                                        Err(ParseError::MissingNewline)?
+                                    match i.next() {
+                                        Some(&Token::Newline{with_escape:false}) | None => {
+                                            break Some(name.clone());
+                                        },
+                                        _ => {
+                                            Err(ParseError::MissingNewline)?
+                                        }
                                     }
                                 },
                                 name => parse_directive(name, i, depth)?
-                           }
+                            }
                         } else {
                             parse_directive(name.as_str(), i, depth)?
                         }
