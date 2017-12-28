@@ -18,21 +18,21 @@ pub enum Item<'a> {
     },
 }
 
-pub fn parse<'a>(tokens: &'a [Token]) -> Result<Vec<Item<'a>>> {
-    let i = tokens.iter();
+pub fn parse<'a>(tokens: Vec<Token<'a>>) -> Result<Vec<Item<'a>>> {
+    let i = tokens.into_iter();
     let (result, _) = parse_block(&mut i.peekable(), 0)?;
     Ok(result)
 }
 
 fn parse_block<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>, Option<Cow<'a, str>>)>
-    where I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
     let mut items = Vec::new();
     let directive = loop {
         match i.next() {
             Some(token) => {
                 let item = match token {
-                    &Token::PreprocessorDirective(ref name) => {
+                    Token::PreprocessorDirective(ref name) => {
                         if depth > 0 && is_closing_directive(i, name.deref())? {
                             break Some(name.clone());
                         } else {
@@ -56,12 +56,12 @@ fn parse_block<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>
 }
 
 fn is_closing_directive<'a, I>(i : &mut Peekable<I>, name : &str) -> Result<bool>
-    where I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
     match name.deref() {
         "else" | "endif" => {
             match i.next() {
-                Some(&Token::Newline{with_escape:false}) | None => {
+                Some(Token::Newline{with_escape:false}) | None => {
                     Ok(true)
                 },
                 _ => {
@@ -74,12 +74,12 @@ fn is_closing_directive<'a, I>(i : &mut Peekable<I>, name : &str) -> Result<bool
 }
 
 
-fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item<'a>>
-    where I: Iterator<Item = &'a Token<'a>>
+fn parse_text<'a, I>(first_token: Token<'a>, i: &mut Peekable<I>) -> Result<Item<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
-    let mut text = vec![first_token.clone()];
+    let mut text = vec![first_token];
     loop {
-        if let Some(&&Token::PreprocessorDirective(_)) = i.peek() {
+        if let Some(&Token::PreprocessorDirective(_)) = i.peek() {
             break;
         }
         match i.next() {
@@ -96,7 +96,7 @@ fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item
 
 
 fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item<'a>>
-    where I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
     match name {
         "if" | "elif" | "error" | "warning" |
@@ -104,8 +104,8 @@ fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -
         "include" => {
             // TODO: Accept symbol as well
             let filename = i.next();
-            if let Some(&Token::String(ref s)) = filename {
-                Ok(Item::Include(Cow::Borrowed(s)))
+            if let Some(Token::String(s)) = filename {
+                Ok(Item::Include(s))
             } else {
                 Err(ParseError::MissingParameter)?
             }
@@ -115,7 +115,7 @@ fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -
         },
         "undef" => {
             let symbol = i.next();
-            if let Some(&Token::Word(ref s)) = symbol {
+            if let Some(Token::Word(ref s)) = symbol {
                 Ok(Item::Undefine(s.clone()))
             } else {
                 Err(ParseError::MissingParameter)?
@@ -132,11 +132,11 @@ fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -
 }
 
 fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name: &str, depth: i32) -> Result<Item<'a>>
-    where I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
     let symbol = i.next();
-    if let Some(&Token::Word(ref symbol)) = symbol {
-        if let Some(&Token::Newline {with_escape:false}) = i.next() {
+    if let Some(Token::Word(symbol)) = symbol {
+        if let Some(Token::Newline {with_escape:false}) = i.next() {
             let (items, closing_directive) = parse_block(i, depth + 1)?;
             let items2 = match closing_directive.as_ref().map(|a| a.deref()) {
                 Some("endif") => {
@@ -157,14 +157,14 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name: &str, depth: i3
             match directive_name {
                 "ifdef" => {
                     Ok(Item::Conditional {
-                        define_name: Cow::Borrowed(symbol),
+                        define_name: symbol,
                         defined: items,
                         not_defined: items2
                     })
                 },
                 "ifndef" => {
                     Ok(Item::Conditional {
-                        define_name: Cow::Borrowed(symbol),
+                        define_name: symbol,
                         defined: items2,
                         not_defined: items
                     })
@@ -181,26 +181,26 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name: &str, depth: i3
 
 
 fn parse_define<'a, I>(i: &mut I) -> Result<Item<'a>>
-    where I: Iterator<Item = &'a Token<'a>>
+    where I: Iterator<Item = Token<'a>>
 {
     let symbol = i.next();
-    if let Some(&Token::Word(ref s)) = symbol {
+    if let Some(Token::Word(s)) = symbol {
         let mut value = Vec::new();
         loop {
             if let Some(token) = i.next() {
                 match token {
-                    &Token::Newline { with_escape: false } => {
+                    Token::Newline { with_escape: false } => {
                         break;
                     },
                     _ => {
-                        value.push(token.clone());
+                        value.push(token);
                     }
                 }
             } else {
                 break;
             }
         }
-        Ok(Item::Define(s.clone(), value))
+        Ok(Item::Define(s, value))
     } else {
         Err(ParseError::MissingParameter)?
     }

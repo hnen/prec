@@ -31,12 +31,12 @@ where
     process_mut_defines(code, &mut defines, file_loader)
 }
 
-pub fn process_mut_defines<'a, F>(code: &'a str, defines: &'a mut HashMap<&'a str, Vec<Token<'a>>>, file_loader: F) -> Result<String>
+pub fn process_mut_defines<'a, F>(code: &'a str, defines: &mut HashMap<String, Vec<Token<'a>>>, file_loader: F) -> Result<String>
     where
         F: Fn(&str) -> Option<String>,
 {
     let tokens = lexer::tokenize(code)?;
-    let parsed = parser::parse(&tokens[..])?;
+    let parsed = parser::parse(tokens)?;
     let mut result = String::new();
     for item in parsed {
         match item {
@@ -46,11 +46,10 @@ pub fn process_mut_defines<'a, F>(code: &'a str, defines: &'a mut HashMap<&'a st
             Item::Undefine(s) => {
                 defines.remove(s.deref());
             },
-            /*
-
             Item::Define(symbol, value) => {
-                defines.insert(symbol.deref(), value);
+                defines.insert(symbol.to_string(), value.clone());
             },
+            /*
             Item::Include(f) => {
                 match file_loader(f.deref()) {
                     Some(file_contents) => {
@@ -79,10 +78,10 @@ fn push_tokens_to_str(dest_str : &mut String, tokens : &[Token]) {
     }
 }
 
-fn defines_as_tokens<'a,'b>(defines: &[Define<'a, 'b>]) -> Result<HashMap<&'a str, Vec<Token<'b>>>> {
+fn defines_as_tokens<'a,'b>(defines: &[Define<'a, 'b>]) -> Result<HashMap<String, Vec<Token<'b>>>> {
     let as_tokens = defines.iter().map(
         |d| (
-            d.name,
+            d.name.to_string(),
             match d.value {
                 Some(val) => lexer::tokenize(val),
                 None => Ok(vec![])
