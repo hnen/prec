@@ -35,7 +35,14 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>
                         if depth > 0 {
                             match name.as_str() {
                                 "else" | "endif" => {
-                                    break Some(name.clone());
+                                    let next = i.next();
+                                    if let Some(&Token::Newline{with_escape:false}) = next {
+                                        break Some(name.clone());
+                                    } else if next == None {
+                                        break Some(name.clone());
+                                    } else {
+                                        Err(ParseError::MissingNewline)?
+                                    }
                                 },
                                 name => parse_directive(name, i, depth)?
                            }
@@ -123,39 +130,43 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i
 {
     let symbol = i.next();
     if let Some(&Token::Word(ref symbol)) = symbol {
-        let (items, closing_directive) = parse_from_iter(i, depth + 1)?;
-        let items2 = match closing_directive.as_ref().map(|a| a.as_str()) {
-            Some("endif") => {
-                vec![]
-            },
-            Some("else") => {
-                let (items2, closing_directive) = parse_from_iter(i, depth + 1)?;
-                match closing_directive.as_ref().map(|a| a.as_str()) {
-                    Some("endif") => items2,
-                    _ => Err(ParseError::ElseWithoutEndif)?
+        if let Some(&Token::Newline {with_escape:false}) = i.next() {
+            let (items, closing_directive) = parse_from_iter(i, depth + 1)?;
+            let items2 = match closing_directive.as_ref().map(|a| a.as_str()) {
+                Some("endif") => {
+                    vec![]
+                },
+                Some("else") => {
+                    let (items2, closing_directive) = parse_from_iter(i, depth + 1)?;
+                    match closing_directive.as_ref().map(|a| a.as_str()) {
+                        Some("endif") => items2,
+                        _ => Err(ParseError::ElseWithoutEndif)?
+                    }
+                },
+                _ => {
+                    Err(ParseError::IfWithoutEndif)?
                 }
-            },
-            _ => {
-                Err(ParseError::IfWithoutEndif)?
-            }
-        };
+            };
 
-        match directive_name {
-            "ifdef" => {
-                Ok(Item::Conditional {
-                    define_name: symbol.to_string(),
-                    defined: items,
-                    not_defined: items2
-                })
-            },
-            "ifndef" => {
-                Ok(Item::Conditional {
-                    define_name: symbol.to_string(),
-                    defined: items2,
-                    not_defined: items
-                })
-            },
-            _ => unreachable!()
+            match directive_name {
+                "ifdef" => {
+                    Ok(Item::Conditional {
+                        define_name: symbol.to_string(),
+                        defined: items,
+                        not_defined: items2
+                    })
+                },
+                "ifndef" => {
+                    Ok(Item::Conditional {
+                        define_name: symbol.to_string(),
+                        defined: items2,
+                        not_defined: items
+                    })
+                },
+                _ => unreachable!()
+            }
+        } else {
+            Err(ParseError::MissingNewline)?
         }
     } else {
         Err(ParseError::MissingParameter)?
@@ -196,21 +207,21 @@ fn test_parse_conditional() {
 defined
 #else
 undefined
-#endif
-";
+#endif";
     let code2 = "\
 #ifndef TEST
 undefined
 #else
 defined
-#endif
-";
+#endif";
 
     let result = Ok(vec![
         Item::Conditional {
             define_name: "TEST".to_string(),
-            defined: vec![Item::Text(vec![Token::Word("defined".to_string())])],
-            not_defined: vec![Item::Text(vec![Token::Word("undefined".to_string())])],
+            defined: vec![Item::Text(vec![Token::Word("defined".to_string()),
+                                          Token::Newline {with_escape: false}])],
+            not_defined: vec![Item::Text(vec![Token::Word("undefined".to_string()),
+                                              Token::Newline {with_escape: false}])],
         }
     ]);
 
@@ -230,8 +241,7 @@ fn test_parse_conditional_nested() {
     section2
 #else
     section3
-#endif
-";
+#endif";
 
     let result = Ok(vec![
         Item::Conditional {

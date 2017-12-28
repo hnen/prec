@@ -5,6 +5,7 @@ pub type Result<T> = ::std::result::Result<T, Error>;
 pub enum ParseError {
     UnknownPreprocessorDirective(String),
     MissingParameter,
+    MissingNewline,
     CantOpenFile,
     ExpectedWhitespace,
     UnknownError,

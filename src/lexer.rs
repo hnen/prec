@@ -18,7 +18,12 @@ pub fn tokenize(code: &str) -> Result<Vec<Token>> {
         let remaining_code = match parse_token(code.as_bytes()) {
             IResult::Done(rest, token) => {
                 let rest = ::std::str::from_utf8(rest).unwrap();
-                ret.push(token);
+                match token {
+                    Token::Comment => {},
+                    token => {
+                        ret.push(token);
+                    }
+                }
                 rest
             }
             IResult::Error(_) |
