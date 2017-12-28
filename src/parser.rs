@@ -289,7 +289,7 @@ fn test_parse_define() {
         Ok(vec![
             Item::Define(
                 "TEST".to_string(),
-                vec![Token::Word("0xFFFF".to_string()), Token::Comment]
+                vec![Token::Word("0xFFFF".to_string())]
             ),
             Item::Text(vec![
                 Token::Word("some".to_string()),
