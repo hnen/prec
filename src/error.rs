@@ -6,7 +6,6 @@ pub enum ParseError {
     UnknownPreprocessorDirective(String),
     MissingParameter,
     MissingNewline,
-    CantOpenFile,
     ExpectedWhitespace,
     UnknownError,
     UnspportedPreprocessor(String),
@@ -20,6 +19,7 @@ pub enum ParseError {
 pub enum Error {
     LexingError,
     ParsingError(ParseError),
+    CantOpenFile,
     None,
 }
 

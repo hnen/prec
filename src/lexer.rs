@@ -12,6 +12,20 @@ pub enum Token<'a> {
     Char(char),
 }
 
+impl<'a> Token<'a> {
+    pub fn output_str(&'a self) -> Cow<'a, str> {
+        match self {
+            &Token::Word(ref s) => Cow::Borrowed(s),
+            &Token::PreprocessorDirective(ref s) => Cow::Owned(format!("#{}", s)),
+            &Token::Comment => Cow::Borrowed(""),
+            &Token::String(ref s) => Cow::Owned(format!("\"{}\"", s)),
+            &Token::Newline { with_escape: false } => Cow::Borrowed("\n"),
+            &Token::Newline { with_escape: true } => Cow::Borrowed("\\\n"),
+            &Token::Char(s) => Cow::Owned(format!("{}", s))
+        }
+    }
+}
+
 pub fn tokenize<'a>(code: &'a str) -> Result<Vec<Token<'a>>> {
     let mut code = code;
     let mut ret = Vec::new();
