@@ -12,23 +12,20 @@ pub enum Item<'a> {
     Define(Cow<'a, str>, Vec<Token<'a>>),
     Undefine(Cow<'a, str>),
     Conditional {
-        define_name: Cow<'a, str>
-
-        ,
+        define_name: Cow<'a, str>,
         defined: Vec<Item<'a>>,
         not_defined: Vec<Item<'a>>,
     },
 }
 
 pub fn parse<'a>(tokens: &'a [Token]) -> Result<Vec<Item<'a>>> {
-    let
-    i = tokens.iter();
-    let (result, _) = parse_from_iter(&mut i.peekable(), 0)?;
+    let i = tokens.iter();
+    let (result, _) = parse_block(&mut i.peekable(), 0)?;
     Ok(result)
 
 }
 
-fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>, Option<Cow<'a, str>>)>
+fn parse_block<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<'a>>, Option<Cow<'a, str>>)>
     where I: Iterator<Item = &'a Token<'a>>
 {
     let mut items = Vec::new();
@@ -37,22 +34,10 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<
             Some(token) => {
                 let item = match token {
                     &Token::PreprocessorDirective(ref name) => {
-                        if depth > 0 {
-                            match name.deref() {
-                                "else" | "endif" => {
-                                    match i.next() {
-                                        Some(&Token::Newline{with_escape:false}) | None => {
-                                            break Some(name.clone());
-                                        },
-                                        _ => {
-                                            Err(ParseError::MissingNewline)?
-                                        }
-                                    }
-                                },
-                                name => parse_directive(name, i, depth)?
-                            }
+                        if depth > 0 && is_closing_directive(i, name.deref())? {
+                            break Some(name.clone());
                         } else {
-                            parse_directive(name, i, depth)?
+                            parse_directive_as_item(name, i, depth)?
                         }
                     },
                     _ => {
@@ -70,6 +55,26 @@ fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item<
     Ok((items, directive))
 
 }
+
+fn is_closing_directive<'a, I>(i : &mut Peekable<I>, name : &str) -> Result<bool>
+    where
+        I: Iterator<Item = &'a Token<'a>>
+{
+    match name.deref() {
+        "else" | "endif" => {
+            match i.next() {
+                Some(&Token::Newline{with_escape:false}) | None => {
+                    Ok(true)
+                },
+                _ => {
+                    Err(ParseError::MissingNewline)?
+                }
+            }
+        },
+        _ => Ok(false)
+    }
+}
+
 
 fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item<'a>>
     where
@@ -93,7 +98,7 @@ fn parse_text<'a, I>(first_token: &'a Token, i: &mut Peekable<I>) -> Result<Item
 }
 
 
-fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item<'a>>
+fn parse_directive_as_item<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item<'a>>
     where I: Iterator<Item = &'a Token<'a>>,
 {
     match name {
@@ -135,13 +140,13 @@ fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i
     let symbol = i.next();
     if let Some(&Token::Word(ref symbol)) = symbol {
         if let Some(&Token::Newline {with_escape:false}) = i.next() {
-            let (items, closing_directive) = parse_from_iter(i, depth + 1)?;
+            let (items, closing_directive) = parse_block(i, depth + 1)?;
             let items2 = match closing_directive.as_ref().map(|a| a.deref()) {
                 Some("endif") => {
                     vec![]
                 },
                 Some("else") => {
-                    let (items2, closing_directive) = parse_from_iter(i, depth + 1)?;
+                    let (items2, closing_directive) = parse_block(i, depth + 1)?;
                     match closing_directive.as_ref().map(|a| a.deref()) {
                         Some("endif") => items2,
                         _ => Err(ParseError::ElseWithoutEndif)?
