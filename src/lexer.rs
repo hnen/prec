@@ -121,11 +121,11 @@ void frag() {
         PreprocessorDirective("include".to_string()), String("header.h".to_string()), Newline{with_escape: false},
 
         PreprocessorDirective("define".to_string()), Word("TEST".to_string()),
-        Word("1.0f".to_string()), Comment, Newline{with_escape: false},
+        Word("1.0f".to_string()), Newline{with_escape: false},
 
         Newline{with_escape: false},
 
-        Comment, Newline{with_escape: false},
+        Newline{with_escape: false},
 
         Word("void".to_string()), Word("frag".to_string()), Char('('), Char(')'), Char('{'),
         Newline{with_escape: false},
