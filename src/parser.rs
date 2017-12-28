@@ -18,16 +18,15 @@ pub enum Item {
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>> {
     let mut i = tokens.iter();
-    let (result, _) = parse_from_iter(&mut i, 0)?;
+    let (result, _) = parse_from_iter(&mut i.peekable(), 0)?;
     Ok(result)
 
 }
 
-fn parse_from_iter<'a, I>(i : &mut I, depth: i32) -> Result<(Vec<Item>, Option<String>)>
+fn parse_from_iter<'a, I>(i : &mut Peekable<I>, depth: i32) -> Result<(Vec<Item>, Option<String>)>
     where I: Iterator<Item = &'a Token>
 {
     let mut items = Vec::new();
-    let mut i = i.peekable();
     let directive = loop {
         match i.next() {
             Some(token) => {
@@ -38,14 +37,14 @@ fn parse_from_iter<'a, I>(i : &mut I, depth: i32) -> Result<(Vec<Item>, Option<S
                                 "else" | "endif" => {
                                     break Some(name.clone());
                                 },
-                                name => parse_directive(name, &mut i, depth)?
+                                name => parse_directive(name, i, depth)?
                            }
                         } else {
-                            parse_directive(name.as_str(), &mut i, depth)?
+                            parse_directive(name.as_str(), i, depth)?
                         }
                     },
                     _ => {
-                        parse_text(token, &mut i)?
+                        parse_text(token, i)?
                         //Item::Text(vec![])
                     }
                 };
@@ -83,7 +82,7 @@ fn parse_text<'a, I>(first_token: &Token, i: &mut Peekable<I>) -> Result<Item>
 }
 
 
-fn parse_directive<'a, I>(name: &str, i: &mut I, depth: i32) -> Result<Item>
+fn parse_directive<'a, I>(name: &str, i: &mut Peekable<I>, depth: i32) -> Result<Item>
     where I: Iterator<Item = &'a Token>,
 {
     match name {
@@ -119,12 +118,48 @@ fn parse_directive<'a, I>(name: &str, i: &mut I, depth: i32) -> Result<Item>
     }
 }
 
-fn parse_conditional<'a, I>(i: &mut I, directive_name : &str, depth: i32) -> Result<Item>
+fn parse_conditional<'a, I>(i: &mut Peekable<I>, directive_name : &str, depth: i32) -> Result<Item>
     where I: Iterator<Item = &'a Token>
 {
     let symbol = i.next();
-    let (items, closing_directive) = parse_from_iter(i, depth+1)?;
-    unimplemented!();
+    if let Some(&Token::Word(ref symbol)) = symbol {
+        let (items, closing_directive) = parse_from_iter(i, depth + 1)?;
+        let items2 = match closing_directive.as_ref().map(|a| a.as_str()) {
+            Some("endif") => {
+                vec![]
+            },
+            Some("else") => {
+                let (items2, closing_directive) = parse_from_iter(i, depth + 1)?;
+                match closing_directive.as_ref().map(|a| a.as_str()) {
+                    Some("endif") => items2,
+                    _ => Err(ParseError::ElseWithoutEndif)?
+                }
+            },
+            _ => {
+                Err(ParseError::IfWithoutEndif)?
+            }
+        };
+
+        match directive_name {
+            "ifdef" => {
+                Ok(Item::Conditional {
+                    define_name: symbol.to_string(),
+                    defined: items,
+                    not_defined: items2
+                })
+            },
+            "ifndef" => {
+                Ok(Item::Conditional {
+                    define_name: symbol.to_string(),
+                    defined: items2,
+                    not_defined: items
+                })
+            },
+            _ => unreachable!()
+        }
+    } else {
+        Err(ParseError::MissingParameter)?
+    }
 }
 
 
@@ -152,6 +187,69 @@ fn parse_define<'a, I>(i: &mut I) -> Result<Item>
     } else {
         Err(ParseError::MissingParameter)?
     }
+}
+
+#[test]
+fn test_parse_conditional() {
+    let code1 = "\
+#ifdef TEST
+defined
+#else
+undefined
+#endif
+";
+    let code2 = "\
+#ifndef TEST
+undefined
+#else
+defined
+#endif
+";
+
+    let result = Ok(vec![
+        Item::Conditional {
+            define_name: "TEST".to_string(),
+            defined: vec![Item::Text(vec![Token::Word("defined".to_string())])],
+            not_defined: vec![Item::Text(vec![Token::Word("undefined".to_string())])],
+        }
+    ]);
+
+    assert_eq!(parse(&::lexer::tokenize(code1).unwrap()[..]), result);
+    assert_eq!(parse(&::lexer::tokenize(code2).unwrap()[..]), result);
+
+}
+
+#[test]
+fn test_parse_conditional_nested() {
+    let code = "\
+#ifdef __TEST
+    section4
+    #ifndef ANOTHER_TEST
+        section1
+    #endif
+    section2
+#else
+    section3
+#endif
+";
+
+    let result = Ok(vec![
+        Item::Conditional {
+            define_name: "__TEST".to_string(),
+            defined: vec![
+                Item::Text(vec![Token::Word("section2".to_string())]),
+                Item::Conditional{
+                    define_name: "ANOTHER_TEST".to_string(),
+                    defined: vec![],
+                    not_defined: vec![Item::Text(vec![Token::Word("section1".to_string())])]
+                },
+                Item::Text(vec![Token::Word("section2".to_string())])
+            ],
+            not_defined: vec![Item::Text(vec![Token::Word("section3".to_string())])],
+        }
+    ]);
+
+    assert_eq!(parse(&::lexer::tokenize(code).unwrap()[..]), result);
 }
 
 

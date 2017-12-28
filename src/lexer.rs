@@ -3,7 +3,7 @@ use error::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    Word(String),
+    Word(Cow<str>),
     PreprocessorDirective(String),
     Comment,
     String(String),

@@ -10,7 +10,9 @@ pub enum ParseError {
     UnknownError,
     UnspportedPreprocessor(String),
     UnrecognizedPreprocessor(String),
-    UnexpectedPreprocessor(String)
+    UnexpectedPreprocessor(String),
+    ElseWithoutEndif,
+    IfWithoutEndif
 }
 
 #[derive(Debug, PartialEq, Clone)]
