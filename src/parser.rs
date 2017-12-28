@@ -247,15 +247,15 @@ fn test_parse_conditional_nested() {
         Item::Conditional {
             define_name: "__TEST".to_string(),
             defined: vec![
-                Item::Text(vec![Token::Word("section2".to_string())]),
+                Item::Text(vec![Token::Word("section4".to_string()), Token::Newline {with_escape:false}]),
                 Item::Conditional{
                     define_name: "ANOTHER_TEST".to_string(),
                     defined: vec![],
-                    not_defined: vec![Item::Text(vec![Token::Word("section1".to_string())])]
+                    not_defined: vec![Item::Text(vec![Token::Word("section1".to_string()), Token::Newline {with_escape:false}])]
                 },
-                Item::Text(vec![Token::Word("section2".to_string())])
+                Item::Text(vec![Token::Word("section2".to_string()), Token::Newline {with_escape:false}])
             ],
-            not_defined: vec![Item::Text(vec![Token::Word("section3".to_string())])],
+            not_defined: vec![Item::Text(vec![Token::Word("section3".to_string()), Token::Newline {with_escape:false}])],
         }
     ]);
 
