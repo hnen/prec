@@ -7,8 +7,8 @@ Intended to use from code for tools, etc. Developed originally for my personal r
 The api has been designed simplicity in mind. Currently public API exposes only one function('process') and related
 error types. The processor works with any language which has C-style comment and string tokenization.
 
-I've aimed to keep unnecessary allocations at minimum (lexer and parser are zero-copy) but processor does some string
-allocation and copying,
+I've aimed to keep unnecessary allocations at minimum (lexer and parser are zero-copy) but processor may not be optimal
+in this regard. 
 
 ## Supported directives
  - \#include
