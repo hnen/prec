@@ -8,14 +8,14 @@ use parser::Item;
 use lexer::Token;
 use error::*;
 
-static FORMAT_MAX_DEPTH : i32 = 100;
+static FORMAT_MAX_DEPTH: i32 = 100;
 
 pub struct Define<'a, 'b> {
     name: &'a str,
     value: Option<&'b str>,
 }
 
-impl<'a,'b> Define<'a, 'b> {
+impl<'a, 'b> Define<'a, 'b> {
     pub fn new(name: &'a str, value: &'b str) -> Define<'a, 'b> {
         Define {
             name,
@@ -28,17 +28,22 @@ pub fn process<F>(code: &str, defines: &[Define], file_loader: F) -> Result<Stri
 where
     F: Fn(&str) -> Option<String>,
 {
-    let mut defines = defines.into_iter().map(|n| (n.name.to_string(),
-                                              n.value.map(|a| a.to_string()) )).collect::<HashMap<_,_>>();
+    let mut defines = defines
+        .into_iter()
+        .map(|n| (n.name.to_string(), n.value.map(|a| a.to_string())))
+        .collect::<HashMap<_, _>>();
     let tokens = lexer::tokenize(code)?;
     let parsed = parser::parse(tokens)?;
     process_mut_defines(parsed, &mut defines, &file_loader)
 }
 
-pub fn process_mut_defines<'a, F>(parsed: Vec<Item>, defines: &mut HashMap<String, Option<String> >,
-                                  file_loader: &F) -> Result<String>
-    where
-        F: Fn(&str) -> Option<String>,
+pub fn process_mut_defines<'a, F>(
+    parsed: Vec<Item>,
+    defines: &mut HashMap<String, Option<String>>,
+    file_loader: &F,
+) -> Result<String>
+where
+    F: Fn(&str) -> Option<String>,
 {
     let mut result = String::new();
 
@@ -46,30 +51,31 @@ pub fn process_mut_defines<'a, F>(parsed: Vec<Item>, defines: &mut HashMap<Strin
         match item {
             Item::Text(tokens) => {
                 format_tokens_to_string(&mut result, &tokens[..], FORMAT_MAX_DEPTH, defines)?;
-            },
+            }
             Item::Undefine(s) => {
                 defines.remove(s.deref());
-            },
+            }
             Item::Define(symbol, value) => {
                 let mut val = String::new();
                 format_tokens_to_string(&mut val, &value[..], FORMAT_MAX_DEPTH, defines)?;
                 defines.insert(symbol.to_string(), Some(val));
-            },
+            }
             Item::Include(f) => {
                 match file_loader(f.deref()) {
                     Some(file_contents) => {
                         let tokens = lexer::tokenize(file_contents.as_str())?;
                         let parsed = parser::parse(tokens)?;
-                        let processed = process_mut_defines(parsed, defines,
-                                                            file_loader)?;
+                        let processed = process_mut_defines(parsed, defines, file_loader)?;
                         result.push_str(processed.as_str());
-                    },
-                    None => {
-                        Err(Error::CantOpenFile)?
                     }
+                    None => Err(Error::CantOpenFile)?,
                 }
-            },
-            Item::Conditional { define_name, defined, not_defined } => {
+            }
+            Item::Conditional {
+                define_name,
+                defined,
+                not_defined,
+            } => {
                 let processed = if defines.contains_key(define_name.deref()) {
                     process_mut_defines(defined, defines, file_loader)?
                 } else {
@@ -83,7 +89,12 @@ pub fn process_mut_defines<'a, F>(parsed: Vec<Item>, defines: &mut HashMap<Strin
     Ok(result)
 }
 
-fn format_tokens_to_string(dest_str : &mut String, tokens : &[Token], max_depth : i32, defines: &HashMap<String, Option<String>>) -> Result<()> {
+fn format_tokens_to_string(
+    dest_str: &mut String,
+    tokens: &[Token],
+    max_depth: i32,
+    defines: &HashMap<String, Option<String>>,
+) -> Result<()> {
 
     if max_depth < 0 {
         Err(Error::MaxRecursionDepthReached)?
@@ -101,8 +112,8 @@ fn format_tokens_to_string(dest_str : &mut String, tokens : &[Token], max_depth 
 
     // push rest
     for token in i {
-        if let &Token::Newline{with_escape: false} = token {
-        } else if let &Token::Newline{..} = token_prev {
+        if let &Token::Newline { with_escape: false } = token {
+        } else if let &Token::Newline { .. } = token_prev {
         } else {
             dest_str.push_str(" ");
         }
@@ -116,16 +127,20 @@ fn format_tokens_to_string(dest_str : &mut String, tokens : &[Token], max_depth 
     Ok(())
 }
 
-fn push_word_to_string(dest_str : &mut String, word : &str, recursion_depth_left : i32,
-                       defines: &HashMap<String, Option<String>>) -> Result<()> {
+fn push_word_to_string(
+    dest_str: &mut String,
+    word: &str,
+    recursion_depth_left: i32,
+    defines: &HashMap<String, Option<String>>,
+) -> Result<()> {
     if defines.contains_key(word) {
         let mut out = String::new();
         let value = match defines.get(word).unwrap() {
             &None => "",
-            &Some(ref w) => w.as_str()
+            &Some(ref w) => w.as_str(),
         };
         let tokens = lexer::tokenize(value)?;
-        format_tokens_to_string(&mut out, &tokens[..], recursion_depth_left-1, defines)?;
+        format_tokens_to_string(&mut out, &tokens[..], recursion_depth_left - 1, defines)?;
         dest_str.push_str(out.as_str());
     } else {
         dest_str.push_str(word);
@@ -142,8 +157,11 @@ foo
 bar
 #endif";
 
-    assert_eq!( process(code, &[Define::new("TEST", "")], |_| None ), Ok("foo\n".to_string()) );
-    assert_eq!( process(code, &[], |_| None ), Ok("bar\n".to_string()) );
+    assert_eq!(
+        process(code, &[Define::new("TEST", "")], |_| None),
+        Ok("foo\n".to_string())
+    );
+    assert_eq!(process(code, &[], |_| None), Ok("bar\n".to_string()));
 }
 
 #[test]
@@ -152,7 +170,7 @@ pub fn test_process_define() {
 #define foo bar
 foo";
 
-    assert_eq!( process(code, &[], |_| None ), Ok("bar".to_string()) );
+    assert_eq!(process(code, &[], |_| None), Ok("bar".to_string()));
 }
 
 
@@ -163,12 +181,13 @@ pub fn test_process_include() {
 bar";
     let code_2 = "foo";
 
-    assert_eq!(process(code, &[],
-                       |f| match f {
-                           "test" => Some(code_2.to_string()),
-                           _ => None
-                       } ),
-               Ok("foo\nbar".to_string()) );
+    assert_eq!(
+        process(code, &[], |f| match f {
+            "test" => Some(code_2.to_string()),
+            _ => None,
+        }),
+        Ok("foo\nbar".to_string())
+    );
 }
 
 #[test]
@@ -179,14 +198,8 @@ pub fn test_overflow() {
 #define bar foo
 foo";
 
-    assert_eq!( process(code, &[], |_| None ), Err(Error::MaxRecursionDepthReached));
+    assert_eq!(
+        process(code, &[], |_| None),
+        Err(Error::MaxRecursionDepthReached)
+    );
 }
-
-
-
-
-
-
-
-
-

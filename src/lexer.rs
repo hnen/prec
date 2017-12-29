@@ -8,7 +8,7 @@ pub enum Token<'a> {
     PreprocessorDirective(Cow<'a, str>),
     Comment,
     String(Cow<'a, str>),
-    Newline{with_escape:bool},
+    Newline { with_escape: bool },
     Char(char),
 }
 
@@ -22,7 +22,7 @@ impl<'a> Token<'a> {
             &Token::String(ref s) => Cow::Owned(format!("\"{}\"", s)),
             &Token::Newline { with_escape: false } => Cow::Borrowed("\n"),
             &Token::Newline { with_escape: true } => Cow::Borrowed("\\\n"),
-            &Token::Char(s) => Cow::Owned(format!("{}", s))
+            &Token::Char(s) => Cow::Owned(format!("{}", s)),
         }
     }
 }
@@ -35,7 +35,7 @@ pub fn tokenize<'a>(code: &'a str) -> Result<Vec<Token<'a>>> {
             IResult::Done(rest, token) => {
                 let rest = ::std::str::from_utf8(rest).unwrap();
                 match token {
-                    Token::Comment => {},
+                    Token::Comment => {}
                     token => {
                         ret.push(token);
                     }
@@ -206,7 +206,8 @@ fn test_comment_multiline() {
 fn test_string() {
     let code = "\"rabadaba\" and then some()";
     assert_eq!(parse_string(code.as_bytes()),
-               IResult::Done(" and then some()".as_bytes(), Token::String(Cow::Borrowed("rabadaba"))));
+               IResult::Done(" and then some()".as_bytes(),
+                             Token::String(Cow::Borrowed("rabadaba"))));
 }
 
 #[test]

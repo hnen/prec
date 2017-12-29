@@ -12,7 +12,7 @@ pub enum ParseError {
     UnrecognizedPreprocessor(String),
     UnexpectedPreprocessor(String),
     ElseWithoutEndif,
-    IfWithoutEndif
+    IfWithoutEndif,
 }
 
 #[derive(Debug, PartialEq, Clone)]
