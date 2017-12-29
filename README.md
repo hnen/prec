@@ -14,4 +14,3 @@ C Preprocessor Parser for Rust
 - Lexer: Support punctuators?
 - Lexer: Count newlines inside Tokens, can be used to calculate line numbers in error messages
 - Parser: Support computed includes
-- Parser: Get rid of unnecessary clones

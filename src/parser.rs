@@ -231,8 +231,8 @@ defined
         }
     ]);
 
-    assert_eq!(parse(&::lexer::tokenize(code1).unwrap()[..]), result);
-    assert_eq!(parse(&::lexer::tokenize(code2).unwrap()[..]), result);
+    assert_eq!(parse(::lexer::tokenize(code1).unwrap()), result);
+    assert_eq!(parse(::lexer::tokenize(code2).unwrap()), result);
 
 }
 
@@ -268,7 +268,7 @@ fn test_parse_conditional_nested() {
         }
     ]);
 
-    assert_eq!(parse(&::lexer::tokenize(code).unwrap()[..]), result);
+    assert_eq!(parse(::lexer::tokenize(code).unwrap()), result);
 }
 
 
@@ -276,7 +276,7 @@ fn test_parse_conditional_nested() {
 fn test_parse_include() {
     let code = "#include \"../test.h\"";
     assert_eq!(
-        parse(&::lexer::tokenize(code).unwrap()[..]),
+        parse(::lexer::tokenize(code).unwrap()),
         Ok(vec![Item::Include(Cow::Borrowed("../test.h"))])
     );
 }
@@ -285,7 +285,7 @@ fn test_parse_include() {
 fn test_parse_undef() {
     let code = "#undef TEST";
     assert_eq!(
-        parse(&::lexer::tokenize(code).unwrap()[..]),
+        parse(::lexer::tokenize(code).unwrap()),
         Ok(vec![Item::Undefine(Cow::Borrowed("TEST"))])
     );
 }
@@ -294,7 +294,7 @@ fn test_parse_undef() {
 fn test_parse_define() {
     let code = "#define TEST 0xFFFF // comment\nsome code";
     assert_eq!(
-        parse(&::lexer::tokenize(code).unwrap()[..]),
+        parse(::lexer::tokenize(code).unwrap()),
         Ok(vec![
             Item::Define(
                 Cow::Borrowed("TEST"),
@@ -311,7 +311,7 @@ fn test_parse_define() {
     let token = ::lexer::tokenize(code).unwrap();
     println!("{:?}", token);
     assert_eq!(
-        parse(&token[..]),
+        parse(token),
         Ok(vec![
             Item::Text(vec![
                 Token::Word(Cow::Borrowed("some")),
@@ -329,7 +329,7 @@ fn test_parse_define() {
     let token = ::lexer::tokenize(code).unwrap();
     println!("{:?}", token);
     assert_eq!(
-        parse(&token[..]),
+        parse(token),
         Ok(vec![
             Item::Text(vec![
                 Token::Word(Cow::Borrowed("some")),

@@ -7,5 +7,4 @@ mod lexer;
 mod parser;
 mod processor;
 
-pub use lexer::tokenize;
-pub use parser::parse;
+pub use processor::process;

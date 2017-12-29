@@ -20,6 +20,7 @@ pub enum Error {
     LexingError,
     ParsingError(ParseError),
     CantOpenFile,
+    MaxRecursionDepthReached,
     None,
 }
 

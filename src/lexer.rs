@@ -12,8 +12,9 @@ pub enum Token<'a> {
     Char(char),
 }
 
+
 impl<'a> Token<'a> {
-    pub fn output_str(&'a self) -> Cow<'a, str> {
+    pub fn formatted_str(&'a self) -> Cow<'a, str> {
         match self {
             &Token::Word(ref s) => Cow::Borrowed(s),
             &Token::PreprocessorDirective(ref s) => Cow::Owned(format!("#{}", s)),
