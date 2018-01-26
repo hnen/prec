@@ -34,6 +34,8 @@ The library has been written expandability in mind, so it could be possible to e
 example to C# preprocessor directives, or custom C preprocessor style syntax.
 
 ## TODO
+- General: More general test cases
+- General: Isolate tests into own test suite
 - Processor: Concatenate paths properly for nested includes
 - Processor: Support macros
 - Processor: Implement support for:
